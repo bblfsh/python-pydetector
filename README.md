@@ -11,7 +11,7 @@ the future.  Or, better, you can send me a PR if you are bored enough to add it.
 Currently this works on a file by file basis, not examining dependencies 
 recursively.
 
-It it developer as a semi-independing part of
+It it developer as a semi-independent part of
 the [Babelfish](https://github.com/src-d/babelfish) project.  
 
 ```bash
