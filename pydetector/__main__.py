@@ -1,1 +1,2 @@
-pydetector.py
+from pydetector.cli import main
+main()
