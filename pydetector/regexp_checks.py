@@ -8,7 +8,7 @@ __all__ = ['check_syntax_regex', 'check_modules_regex', 'check_modulesymbols_reg
 
 LINESTART    = r"(^|;)\s*"
 WHITEORSEP   = r"(^|\s|;|:|,|=)+"
-PARENTH_ARGS = r"\s*\(.*\)(\s*|$)"
+PARENTH_ARGS = r"\s*\(.*\)"
 
 PY3OTHER_REGEXP = [
     (re.compile(WHITEORSEP + r"raise\s+.*\s+from\s+None", re.MULTILINE), 100),
@@ -16,21 +16,21 @@ PY3OTHER_REGEXP = [
 ]
 
 PY2OTHER_REGEXP = [
-    (re.compile(WHITEORSEP + r"unicode"    + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"iteritems"  + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"iterkeys"   + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"itervalues" + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"viewkeys"   + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"viewitems"  + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"viewvalues" + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"xrange"     + PARENTH_ARGS, re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"xreadlines" + PARENTH_ARGS, re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"basestring" + PARENTH_ARGS, re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"\.has_key"  + PARENTH_ARGS, re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"unicode"    + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.iterkeys"   + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.iteritems"  + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.itervalues" + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewkeys"   + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewitems"  + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewvalues" + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(WHITEORSEP + r"xrange"     + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"xreadlines" + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"raw_input"  + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"basestring\s*:*[^\(]", re.MULTILINE), 100),
     (re.compile(WHITEORSEP + r"print\s+[^\(]", re.MULTILINE), 100),
-    (re.compile(WHITEORSEP + r"__metaclass__\s*=", re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*", re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"raw_input\s*"  + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"__metaclass__\s*=", re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*", re.MULTILINE), 100),
+    (re.compile(r"\w\.has_key"  + PARENTH_ARGS, re.MULTILINE), 100),
 ]
 
 
@@ -158,6 +158,7 @@ def check_syntax_regex(code, matches):
             matches.append(("PY3SYNTAX_"+regtuple[0].pattern, m))
 
     for regtuple in PY2OTHER_REGEXP:
+        print(regtuple[0].pattern)
         m = regtuple[0].findall(code)
         if m:
             py2_score += (regtuple[1] * len(m))
