@@ -4,28 +4,33 @@ import six
 __all__ = ['check_syntax_regex', 'check_modules_regex', 'check_modulesymbols_regex']
 
 # Syntactic elements. Second item in the tuple is the score.
+# TODO: test if I can simplify the regexes while passing tests to improve speed
+
+LINESTART    = r"(^|;)\s*"
+WHITEORSEP   = r"(^|\s|;|:|,|=)+"
+PARENTH_ARGS = r"\s*\(.*\)(\s*|$)"
+
 PY3OTHER_REGEXP = [
-    (re.compile(r"^.*(\s|;|:)+raise\s+.*\s+from\s+None.*$", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+nonlocal\s+.*$", re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"raise\s+.*\s+from\s+None", re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"nonlocal\s+", re.MULTILINE), 100),
 ]
 
 PY2OTHER_REGEXP = [
-    (re.compile(r"(\s|;|:)+print\s+[^\(]", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+basestring\s+[^\(]", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+raw_input\s+\(.*\).*$", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+\.has_key\s+[^\(]", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+unicode\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+iteritems\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+iterkeys\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+itervalues\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+viewkeys\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+viewitems\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+viewvalues\s+\(.*\).*$", re.MULTILINE), 25),
-    (re.compile(r"(\s|;|:)+__metaclass__\s+.*$", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+xrange\s+\(.*\).*$", re.MULTILINE), 100),
-    (re.compile(r"(\s|;|:)+xreadlines\s+\(.*\).*$", re.MULTILINE), 100),
-    (re.compile(r"^.*(\s|;|:)+raise\s+\w+(\.\w+)?,\s+.*$", re.MULTILINE), 100),
-    (re.compile(r"^.*(\s|;|:)+except\s+((?!\().)*,[^(as)].*$", re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"unicode"    + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"iteritems"  + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"iterkeys"   + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"itervalues" + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"viewkeys"   + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"viewitems"  + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"viewvalues" + PARENTH_ARGS, re.MULTILINE), 25), # XXX
+    (re.compile(WHITEORSEP + r"xrange"     + PARENTH_ARGS, re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"xreadlines" + PARENTH_ARGS, re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"basestring" + PARENTH_ARGS, re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"\.has_key"  + PARENTH_ARGS, re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"print\s+[^\(]", re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"__metaclass__\s*=", re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*", re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"raw_input\s*"  + PARENTH_ARGS, re.MULTILINE), 100),
 ]
 
 
@@ -53,8 +58,8 @@ def generate_modules_regex():
     ]
 
     def import_regex_gen(modlist):
-        strregex_import = r"^\s+import\s+.*(%s)(\s+|,|$).*" % "|".join(modlist)
-        strregex_from   = r"^\s+from\s+(%s)\s+import(\s+|,).*" % "|".join(modlist)
+        strregex_import = r"^\s*import\s+.*(%s)(\s+|,|$).*" % "|".join(modlist)
+        strregex_from   = r"^\s*from\s+(%s)\s+import\s+.*" % "|".join(modlist)
 
         return re.compile("^" + strregex_import + "|" + strregex_from, re.MULTILINE)
 
@@ -69,60 +74,60 @@ def generate_modulesymbols_regex():
     global PY2MODULESYMBOLS_REGEXPS
 
     py2only_modulesymbols = {
-        "os": ["getcwdu"],
-        "sys": ["exitfunc", "maxint", "exc_type", "exc_value", "exc_traceback"],
+        "os":       ["getcwdu"],
+        "sys":      ["exitfunc", "maxint", "exc_type", "exc_value", "exc_traceback"],
         "operator": ["isCallable", "sequenceIncludes", "isSequenceType",
-            "isMappingType", "isNumberType", "repeat", "irepeat"],
+                    "isMappingType", "isNumberType", "repeat", "irepeat"],
     }
 
     py3only_modulesymbols = {
-        "abc": ["get_cache_token"],
-        "contextlib": ["supress"],
-        "filecmp": ["clear_cache"],
-        "functools": ["partialmethod"],
-        "gc": ["get_stats"],
-        "glob": ["scape"],
-        "hashlib": ["pbkdf2_hmac"],
-        "html": ["unscape"],
-        "inspect": ["signature", "Parameter", "BoundArguments", "getclosurevars"],
+        "abc":             ["get_cache_token"],
+        "contextlib":      ["supress"],
+        "filecmp":         ["clear_cache"],
+        "functools":       ["partialmethod"],
+        "gc":              ["get_stats"],
+        "glob":            ["scape"],
+        "hashlib":         ["pbkdf2_hmac"],
+        "html":            ["unscape"],
+        "inspect":         ["signature", "Parameter", "BoundArguments", "getclosurevars"],
         "multiprocessing": ["spawn", "forkserver"],
-        "operator": ["length_hint"],
-        "os": ["get_inheritable", "set_inheritable", "get_handle_inheritable",
-            "set_handle_inheritable", "sendfile", "pipe2", "getcwdu"],
-        r"past\.utils": ["old_div"],
-        "poplib": ["capa", "stsl"],
-        "re": ["fullmatch"],
-        "resource": ["prlimit"],
-        "shutil": ["disk_usage"],
-        "signal": ["pthread_sigmask", "pthread_kill", "sigpending", "sigwait",
-                   "sigwaitinfo", "sigtimedwait"],
-        "socket": ["sendmsg", "recvmsg", "recvmsg_info"],
-        "ssl": ["create_default_context", "get_default_verify_paths"],
-        "struct": ["iter_unpack"],
-        "sys": ["getallocatedblocks", "implementation", "maxsize", "exc_info"],
-        "textwrap": ["indent"],
-        "time": ["get_clock_info", "monotonic", "perf_counter", "process_time"],
-        "traceback": ["clear_frames"],
-        "types": ["MappingProxyType", "new_class", "prepare_class"],
-        "weakref": ["WeakMethod", "finalize"],
-        r"xml\.etree": ["XMLPullParser"],
-        "zlib": ["ZLIB_RUNTIME_VERSION"],
+        "operator":        ["length_hint"],
+        "os":              ["get_inheritable", "set_inheritable", "get_handle_inheritable",
+                            "set_handle_inheritable", "sendfile", "pipe2", "getcwdu"],
+        r"past\.utils":    ["old_div"],
+        "poplib":          ["capa", "stsl"],
+        "re":              ["fullmatch"],
+        "resource":        ["prlimit"],
+        "shutil":          ["disk_usage"],
+        "signal":          ["pthread_sigmask", "pthread_kill", "sigpending", "sigwait",
+                           "sigwaitinfo", "sigtimedwait"],
+        "socket":          ["sendmsg", "recvmsg", "recvmsg_info"],
+        "ssl":             ["create_default_context", "get_default_verify_paths"],
+        "struct":          ["iter_unpack"],
+        "sys":             ["getallocatedblocks", "implementation", "maxsize", "exc_info"],
+        "textwrap":        ["indent"],
+        "time":            ["get_clock_info", "monotonic", "perf_counter", "process_time"],
+        "traceback":       ["clear_frames"],
+        "types":           ["MappingProxyType", "new_class", "prepare_class"],
+        "weakref":         ["WeakMethod", "finalize"],
+        r"xml\.etree":     ["XMLPullParser"],
+        "zlib":            ["ZLIB_RUNTIME_VERSION"],
     }
 
-    strregex_import = r"^\s+from\s+%s\s+import\s+(%s)(\s+|,|$).*"
-    strregex_usage = r".*(\s+|,|:|;)%s\.(%s)(\s+|,|:).*"
+    strregex_usage  = r".*" + WHITEORSEP + r"%s\.(%s)" + WHITEORSEP + ".*"
+    strregex_import = r"^\s*from\s+%s\s+import\s+(%s)(\s+|,|$).*"
 
     for modname, symbollist in six.iteritems(py3only_modulesymbols):
         PY3MODULESYMBOLS_REGEXPS.append(re.compile(
             strregex_import % (modname, "|".join(symbollist)) + "|" +
-            strregex_usage % (modname, "|".join(symbollist)),
+            strregex_usage  % (modname, "|".join(symbollist)),
             re.MULTILINE
         ))
 
     for modname, symbollist in six.iteritems(py2only_modulesymbols):
         PY2MODULESYMBOLS_REGEXPS.append(re.compile(
             strregex_import % (modname, "|".join(symbollist)) + "|" +
-            strregex_usage % (modname, "|".join(symbollist)),
+            strregex_usage  % (modname, "|".join(symbollist)),
             re.MULTILINE
         ))
 
