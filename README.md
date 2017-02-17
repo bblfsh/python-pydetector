@@ -14,6 +14,18 @@ recursively.
 It it developer as a semi-independent part of
 the [Babelfish](https://github.com/src-d/babelfish) project.  
 
+## Installation
+
+Surprise:
+
+```bash
+pip install git+https://github.com/juanjux/python-pydetector.git
+```
+
+## Usage
+
+As a script:
+
 ```bash
 usage: detector.py [-h] [-v VERBOSITY] [-d DEFAULTVERSION] [-a] [-o] [-n] [-m]
                    [-s]
@@ -39,6 +51,8 @@ optional arguments:
   -s, --testmodulesyms  Test for version-specific module symbols (WARNING:
                         SLOW!) (default=disabled)
 ```
+
+As a module, use this function defined in pydetector.detector:
 
 ```python
 def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,

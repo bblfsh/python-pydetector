@@ -31,29 +31,39 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
         modsyms_checks=False, stop_on_ok_ast=False, modules_score=150,
         symbols_score=100, verbosity=0):
     """
-    Try to detect if a source file is Python 2 or 3. It uses a combination of tests
-    based on AST extraction and regular expressions.
+        Try to detect if a source file is Python 2 or 3. It uses a combination of
+    tests based on AST extraction and regular expressions.
 
-    Args:
-        files (List[str], optional): list of files
-        codestr (str, optional): source code of a single module to parse
-        ast_checks (bool): enable checking if the AST parses with both Python versions
+    Args: files (List[str], optional): list of files. You can omit this parameter
+    if you pass codestr.
+
+        codestr (str, optional): source code of a single module to parse. You can
+        omit this parameter if you pass "files".
+
+        ast_checks (bool): enable checking if the AST parses with both Python
+        versions
+
         modules_checks (bool): enable checking version-specific module imports
-        modsyms_checks (bool): enable checking version-specific module symbols. Please note
-            that this test can be much slower than the others.
-        stop_on_ok_ast (bool): if the first AST tested works, don't even try with the other
-            version
+
+        modsyms_checks (bool): enable checking version-specific module symbols.
+        Please note that this test can be much slower than the others.
+
+        stop_on_ok_ast (bool): if the first AST tested works, don't even try with
+        the other version
+
         modules_score (int): score given to specific-module matches
+
         symbols_score (int): score given to symbol-specific matches
+
         verbosity (int): verbosity level from 0 (quiet) to 2
 
     Return:
         Dictionary where each key is the filename and the value another dictionary
         with the keys "py2ast" and "py3ast" that will hold the AST if sucessfully
-        parser for that version or "None", "version" with the version number (2 or 3)
-        or 6 is the module seems to be compatible with both versions, "matches" that
-        will hold a list of the matched rules and scores and "py2_score/py3_score"
-        with the specific score.
+        parser for that version or "None", "version" with the version number (2 or
+        3) or 6 is the module seems to be compatible with both versions, "matches"
+        that will hold a list of the matched rules and scores and
+        "py2_score/py3_score" with the specific score.
     """
 
     returndict = {}
