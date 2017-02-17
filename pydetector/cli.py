@@ -33,9 +33,7 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-
-if __name__ == "__main__":
-
+def main():
     args = parse_args()
 
     returndict = detect(
@@ -66,3 +64,7 @@ if __name__ == "__main__":
 
         print('%d files parsed, py2: %d, py3: %d any: %d' %
                 (len(returndict), py2_count, py3_count, pyany_count))
+
+
+if __name__ == "__main__":
+    main()
