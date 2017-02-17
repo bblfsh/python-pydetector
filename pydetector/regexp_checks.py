@@ -8,7 +8,7 @@ __all__ = ['check_syntax_regex', 'check_modules_regex', 'check_modulesymbols_reg
 
 LINESTART    = r"(^|;)\s*"
 WHITEORSEP   = r"(^|\s|;|:|,|=)+"
-PARENTH_ARGS = r"\s*\(.*\)(\s*|$)"
+PARENTH_ARGS = r"\s*\(.*\)"
 
 PY3OTHER_REGEXP = [
     (re.compile(WHITEORSEP + r"raise\s+.*\s+from\s+None", re.MULTILINE), 100),
@@ -16,21 +16,21 @@ PY3OTHER_REGEXP = [
 ]
 
 PY2OTHER_REGEXP = [
-    (re.compile(WHITEORSEP + r"unicode"    + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"iteritems"  + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"iterkeys"   + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"itervalues" + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"viewkeys"   + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"viewitems"  + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"viewvalues" + PARENTH_ARGS, re.MULTILINE), 25), # XXX
-    (re.compile(WHITEORSEP + r"xrange"     + PARENTH_ARGS, re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"xreadlines" + PARENTH_ARGS, re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"basestring" + PARENTH_ARGS, re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"\.has_key"  + PARENTH_ARGS, re.MULTILINE), 100), # XXX
+    (re.compile(WHITEORSEP + r"unicode"    + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.iterkeys"   + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.iteritems"  + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.itervalues" + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewkeys"   + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewitems"  + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewvalues" + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(WHITEORSEP + r"xrange"     + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"xreadlines" + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"raw_input"  + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"basestring\s*:*[^\(]", re.MULTILINE), 100),
     (re.compile(WHITEORSEP + r"print\s+[^\(]", re.MULTILINE), 100),
-    (re.compile(WHITEORSEP + r"__metaclass__\s*=", re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*", re.MULTILINE), 100), # XXX
-    (re.compile(WHITEORSEP + r"raw_input\s*"  + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"__metaclass__\s*=", re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*", re.MULTILINE), 100),
+    (re.compile(r"\w\.has_key"  + PARENTH_ARGS, re.MULTILINE), 100),
 ]
 
 
@@ -58,10 +58,9 @@ def generate_modules_regex():
     ]
 
     def import_regex_gen(modlist):
-        strregex_import = r"^\s*import\s+.*(%s)(\s+|,|$).*" % "|".join(modlist)
-        strregex_from   = r"^\s*from\s+(%s)\s+import\s+.*" % "|".join(modlist)
-
-        return re.compile("^" + strregex_import + "|" + strregex_from, re.MULTILINE)
+        strregex_import = LINESTART + r"import\s+.*(%s)(\s*|,|$)" % "|".join(modlist)
+        strregex_from   = LINESTART + r"from\s+(%s)\s+import\s+" % "|".join(modlist)
+        return re.compile(strregex_import + "|" + strregex_from, re.MULTILINE)
 
     PY2ONLY_MODULES_REGEXP = import_regex_gen(py2only_modules)
     PY3ONLY_MODULES_REGEXP = import_regex_gen(py3only_modules)
@@ -165,7 +164,7 @@ def check_syntax_regex(code, matches):
 
     return py2_score, py3_score
 
-def check_modules_regex(code, matches, match_score):
+def check_modules_regex(code, matches, match_score=100):
     """
     Test for modules specific of some Python version.
 
@@ -182,17 +181,19 @@ def check_modules_regex(code, matches, match_score):
     m = PY3ONLY_MODULES_REGEXP.findall(code)
     if m:
         py3_score += (match_score * len(m))
-        matches.append(('PY3MODS:' + PY3ONLY_MODULES_REGEXP.pattern, m))
+        for match in m:
+            matches.append(('PY3MODS', match))
 
     m = PY2ONLY_MODULES_REGEXP.findall(code)
     if m:
         py2_score += (match_score * len(m))
-        matches.append(('PY2MODS:' + PY2ONLY_MODULES_REGEXP.pattern, m))
+        for match in m:
+            matches.append(('PY2MODS', match))
 
     return py2_score, py3_score
 
 
-def check_modulesymbols_regex(code, matches, symbols_score):
+def check_modulesymbols_regex(code, matches, symbols_score=100):
     """
     Test for module symbols specific of some Python version. Please note
     that this test can be very slow compared with the others since a
