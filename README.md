@@ -8,6 +8,9 @@ precise you want the guessing to be. It doesn't currently use 2tolib since it's
 pretty slow but it implement some of their tests with regexes). I could add it in
 the future.  Or, better, you can send me a PR if you are bored enough to add it.
 
+Currently this works on a file by file basis, not examining dependencies 
+recursively.
+
 It it developer as a semi-independing part of
 the [Babelfish](https://github.com/src-d/babelfish) project.  
 
