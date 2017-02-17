@@ -1,8 +1,6 @@
 import unittest
-import sys
 from textwrap import dedent
-sys.path.append('..')
-from regexp_checks import check_modules_regex, check_syntax_regex # noqa: E402
+from pydetector.regexp_checks import check_modules_regex, check_syntax_regex # noqa: E402 #F401
 
 
 
