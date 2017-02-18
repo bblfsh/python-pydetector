@@ -6,9 +6,10 @@ __all__ = ['check_syntax_regex', 'check_modules_regex', 'check_modulesymbols_reg
 # Syntactic elements. Second item in the tuple is the score.
 # TODO: test if I can simplify the regexes while passing tests to improve speed
 
-LINESTART    = r"(^|;)\s*"
-WHITEORSEP   = r"(^|\s|;|:|,|=)+"
-PARENTH_ARGS = r"\s*\(.*\)"
+LINESTART          = r"(^|;)\s*"
+WHITEORSEP         = r"(^|\s|;|:|,|=)+"
+PARENTH_ARGS       = r"\s*\(.*\)"
+WHITEORSEPORPARENS = r"(^|\s|;|:|,|=|%s)+" % PARENTH_ARGS
 
 PY3OTHER_REGEXP = [
     (re.compile(WHITEORSEP + r"raise\s+.*\s+from\s+None", re.MULTILINE), 100),
@@ -17,20 +18,20 @@ PY3OTHER_REGEXP = [
 
 PY2OTHER_REGEXP = [
     (re.compile(WHITEORSEP + r"unicode"    + PARENTH_ARGS, re.MULTILINE), 25),
-    (re.compile(r"\w\.iterkeys"   + PARENTH_ARGS, re.MULTILINE), 25),
-    (re.compile(r"\w\.iteritems"  + PARENTH_ARGS, re.MULTILINE), 25),
-    (re.compile(r"\w\.itervalues" + PARENTH_ARGS, re.MULTILINE), 25),
-    (re.compile(r"\w\.viewkeys"   + PARENTH_ARGS, re.MULTILINE), 25),
-    (re.compile(r"\w\.viewitems"  + PARENTH_ARGS, re.MULTILINE), 25),
-    (re.compile(r"\w\.viewvalues" + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.iterkeys"            + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.iteritems"           + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.itervalues"          + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewkeys"            + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewitems"           + PARENTH_ARGS, re.MULTILINE), 25),
+    (re.compile(r"\w\.viewvalues"          + PARENTH_ARGS, re.MULTILINE), 25),
     (re.compile(WHITEORSEP + r"xrange"     + PARENTH_ARGS, re.MULTILINE), 100),
     (re.compile(WHITEORSEP + r"xreadlines" + PARENTH_ARGS, re.MULTILINE), 100),
     (re.compile(WHITEORSEP + r"raw_input"  + PARENTH_ARGS, re.MULTILINE), 100),
-    (re.compile(WHITEORSEP + r"basestring\s*:*[^\(]", re.MULTILINE), 100),
-    (re.compile(WHITEORSEP + r"print\s+[^\(]", re.MULTILINE), 100),
-    (re.compile(WHITEORSEP + r"__metaclass__\s*=", re.MULTILINE), 100),
-    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*", re.MULTILINE), 100),
-    (re.compile(r"\w\.has_key"  + PARENTH_ARGS, re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"basestring\s*:*[^\(]",      re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"print\s+[^\(]",             re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"__metaclass__\s*=",         re.MULTILINE), 100),
+    (re.compile(WHITEORSEP + r"raise\s+\w+(\.\w+)?,\s*",   re.MULTILINE), 100),
+    (re.compile(r"\w\.has_key"             + PARENTH_ARGS, re.MULTILINE), 100),
 ]
 
 
@@ -42,18 +43,19 @@ def generate_modules_regex():
 
     py2only_modules = [
         "cfmfile", r"[^hashlib\.]([^_]md5|[^_]sha)", "mimetools", "MimeWriter", "mimify",
-        "multifile", "posixfile", "rfc822", "timing", "audiodev", "stringold", "bsddb185", "Canvas",
-        "commands", "compiler", "dircache", "fpformat", "htmllib", "imageop", "linuxaudiodev", "mhlib",
-        "popen2", "sgmllib", "sre", "statvfs", r"[^collections\.](UserDict|UserString|UserList)",
-        "ConfigParser", "copy_reg", "Queue", "SockerServer", "sets", "StringIO", "cStringIO", "cPickle",
-        "dbhash", "(g|dumb|which|any)dbm", "xmlrpclib", "(Doc|Simple)XMLRPCServer", "httplib",
-        "HTMLParser", "Cookie", "cookielib", "(Base|Simple|CGI)HTTPServer", "urlparse", "robotparser"
+        "(multi|posix)file", "rfc822", "timing", "audiodev", "stringold", "bsddb185", "Canvas",
+        "commands", "compiler", "dircache", "fpformat", "(html|mh|sgml|cookie|xmlrpc|http)lib",
+        "imageop", "linuxaudiodev", "c?StringIO", "cPickle",
+        "popen2", "sre", "statvfs", r"[^collections\.]User(Dict|String|List)",
+        "(Config|HTML|robot)(P|p)arser", "copy_reg", "Queue", "SockerServer", "sets",
+        "dbhash", "(g|dumb|which|any)dbm", "(Doc|Simple)XMLRPCServer",
+        "Cookie", "(Base|Simple|CGI)HTTPServer", "urlparse"
 
     ]
     py3only_modules = [
         "configparser", "copyreg", "queue", "socketserver", "ipaddress", "lzma",
-        "contextlib", "six", # six usually mean both compatible, so just mark as 3
-        "reprlib", "dbm\.(bsd|dumb|ndbm|gdbm)", "xmlrpc\.(client|server)", "http\.(client|server)",
+        "(context|repr)lib", "six", # six usually mean both compatible, so just mark as 3
+        "dbm\.(bsd|dumb|ndbm|gdbm)", "xmlrpc\.(client|server)", "http\.(client|server)",
         "urllib\.(parse|robotparser)"
     ]
 
@@ -113,8 +115,8 @@ def generate_modulesymbols_regex():
         "zlib":            ["ZLIB_RUNTIME_VERSION"],
     }
 
-    strregex_usage  = r".*" + WHITEORSEP + r"%s\.(%s)" + WHITEORSEP + ".*"
-    strregex_import = r"^\s*from\s+%s\s+import\s+(%s)(\s+|,|$).*"
+    strregex_import = r"^\s*from\s+%s\s+import\s+%s(\s+|,|$).*"
+    strregex_usage  = WHITEORSEP + r"%s\.%s" + WHITEORSEPORPARENS
 
     for modname, symbollist in six.iteritems(py3only_modulesymbols):
         PY3MODULESYMBOLS_REGEXPS.append(re.compile(

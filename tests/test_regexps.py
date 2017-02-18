@@ -184,13 +184,13 @@ class Test30ModuleSymbolsRegex(RegexpTestCase):
     def setUp(self):
         self.check_method = check_modulesymbols_regex
 
-    # def test_pymodules_simple(self):
-        # code = (dedent("""
-            # import something, other, mimetools, mimify # 1 double match
-            # def somefunc():
-                # import thing,compiler,blabla,collections.UserDict,pok # 1 double match
-            # """), 200, 0, 2)
-        # self.do_regexp_test(code)
+    def test_pymodules_simple(self):
+        code = (dedent("""
+            def somefunc(param):
+                filecmp.clear_cache(param) # match
+                method = functools.partialmethod # match
+            """), 0, 200, 2)
+        self.do_regexp_test(code)
 
 
 if __name__ == '__main__':
