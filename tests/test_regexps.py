@@ -1,8 +1,7 @@
 import unittest
 from textwrap import dedent
-from pydetector.regexp_checks import check_modules_regex, check_syntax_regex # noqa: E402 #F401
-import pydetector.regexp_checks as r
-print(r)
+from pydetector.regexp_checks import check_modules_regex, \
+        check_syntax_regex, check_modulesymbols_regex
 
 
 class RegexpTestCase(unittest.TestCase):
@@ -20,7 +19,7 @@ class RegexpTestCase(unittest.TestCase):
         self.assertEqual(len(matches), testdata[3])
 
 
-class TestSyntaxRegex(RegexpTestCase):
+class Test10SyntaxRegex(RegexpTestCase):
     def setUp(self):
         self.check_method = check_syntax_regex
 
@@ -119,6 +118,79 @@ class TestSyntaxRegex(RegexpTestCase):
                 __metaclass__ = Singleton
             """), 100, 0, 1)
         self.do_regexp_test(code)
+
+
+class Test20ModulesRegex(RegexpTestCase):
+    def setUp(self):
+        self.check_method = check_modules_regex
+
+    def test_pymodules_simple(self):
+        code = (dedent("""
+            import something, other, mimetools, mimify # 1 double match
+            def somefunc():
+                import thing,compiler,blabla,collections.UserDict,pok # 1 double match
+            """), 200, 0, 2)
+        self.do_regexp_test(code)
+
+    def test_pymodules_simple_multiline(self):
+        code = ("b = 4; import other, mimetools, mimify # 1 double match",
+                100, 0, 1)
+        self.do_regexp_test(code)
+
+    def test_py3modules_simple_multiline(self):
+        code = ("b = 4; import other, urllib.parse, dbm.bsd # 1 double match",
+                0, 100, 1)
+        self.do_regexp_test(code)
+
+    def test_pymodules_simple_multiline_nospace(self):
+        code = ("b = 4;import other,mimetools,mimify # 1 double match",
+                100, 0, 1)
+        self.do_regexp_test(code)
+
+    def test_pymodules_importfrom(self):
+        code = ("from audiodev import * # 1 match", 100, 0, 1)
+        self.do_regexp_test(code)
+
+    def test_py3modules_importfrom(self):
+        code = ("from queue import * # 1 match", 0, 100, 1)
+        self.do_regexp_test(code)
+
+    def test_pymodules_importfrom_multiline(self):
+        code = ("a = 3; from audiodev import * # 1 match", 100, 0, 1)
+        self.do_regexp_test(code)
+
+    def test_pymodules_importfrom_multiline_nospace(self):
+        code = ("a = 3;from audiodev import * # 1 match", 100, 0, 1)
+        self.do_regexp_test(code)
+
+    def test_py_modules_falsepos1(self):
+        code = ("from something import htmllib # NOT match", 0, 0, 0)
+        self.do_regexp_test(code)
+
+    def test_py_modules_falsepos2(self):
+        code = ("from thing.mhlib import stuff # NOT match", 0, 0, 0)
+        self.do_regexp_test(code)
+
+    def test_py_modules_falsepos3(self):
+        code = ("import_multifile = doStuff() # NOT match", 0, 0, 0)
+        self.do_regexp_test(code)
+
+    def test_py_modules_falsepos4(self):
+        code = ("reprlib = doStuff() # NOT match", 0, 0, 0)
+        self.do_regexp_test(code)
+
+
+class Test30ModuleSymbolsRegex(RegexpTestCase):
+    def setUp(self):
+        self.check_method = check_modulesymbols_regex
+
+    # def test_pymodules_simple(self):
+        # code = (dedent("""
+            # import something, other, mimetools, mimify # 1 double match
+            # def somefunc():
+                # import thing,compiler,blabla,collections.UserDict,pok # 1 double match
+            # """), 200, 0, 2)
+        # self.do_regexp_test(code)
 
 
 if __name__ == '__main__':

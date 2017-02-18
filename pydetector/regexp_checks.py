@@ -58,10 +58,9 @@ def generate_modules_regex():
     ]
 
     def import_regex_gen(modlist):
-        strregex_import = r"^\s*import\s+.*(%s)(\s+|,|$).*" % "|".join(modlist)
-        strregex_from   = r"^\s*from\s+(%s)\s+import\s+.*" % "|".join(modlist)
-
-        return re.compile("^" + strregex_import + "|" + strregex_from, re.MULTILINE)
+        strregex_import = LINESTART + r"import\s+.*(%s)(\s*|,|$)" % "|".join(modlist)
+        strregex_from   = LINESTART + r"from\s+(%s)\s+import\s+" % "|".join(modlist)
+        return re.compile(strregex_import + "|" + strregex_from, re.MULTILINE)
 
     PY2ONLY_MODULES_REGEXP = import_regex_gen(py2only_modules)
     PY3ONLY_MODULES_REGEXP = import_regex_gen(py3only_modules)
@@ -158,7 +157,6 @@ def check_syntax_regex(code, matches):
             matches.append(("PY3SYNTAX_"+regtuple[0].pattern, m))
 
     for regtuple in PY2OTHER_REGEXP:
-        print(regtuple[0].pattern)
         m = regtuple[0].findall(code)
         if m:
             py2_score += (regtuple[1] * len(m))
@@ -166,7 +164,7 @@ def check_syntax_regex(code, matches):
 
     return py2_score, py3_score
 
-def check_modules_regex(code, matches, match_score):
+def check_modules_regex(code, matches, match_score=100):
     """
     Test for modules specific of some Python version.
 
@@ -183,17 +181,19 @@ def check_modules_regex(code, matches, match_score):
     m = PY3ONLY_MODULES_REGEXP.findall(code)
     if m:
         py3_score += (match_score * len(m))
-        matches.append(('PY3MODS:' + PY3ONLY_MODULES_REGEXP.pattern, m))
+        for match in m:
+            matches.append(('PY3MODS', match))
 
     m = PY2ONLY_MODULES_REGEXP.findall(code)
     if m:
         py2_score += (match_score * len(m))
-        matches.append(('PY2MODS:' + PY2ONLY_MODULES_REGEXP.pattern, m))
+        for match in m:
+            matches.append(('PY2MODS', match))
 
     return py2_score, py3_score
 
 
-def check_modulesymbols_regex(code, matches, symbols_score):
+def check_modulesymbols_regex(code, matches, symbols_score=100):
     """
     Test for module symbols specific of some Python version. Please note
     that this test can be very slow compared with the others since a
