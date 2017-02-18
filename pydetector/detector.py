@@ -125,13 +125,13 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
                 'matches': [('PY%dASTOK' % astversion, ())]
             })
 
-        # One parsed and the other didnt, no need to continue checking
-        if astversion in (2, 3):
-            retdict['version'] = astversion
-            continue
-        else:
-            retdict['py2ast'] = py2astroot
-            retdict['py3ast'] = py3astroot
+            # One parsed and the other didnt, no need to continue checking
+            if astversion in (2, 3):
+                retdict['version'] = astversion
+                continue
+            else:
+                retdict['py2ast'] = py2astroot
+                retdict['py3ast'] = py3astroot
 
         # Remove comments and emptyfy strings before doing the regex tests,
         # this will remove most fase positives
