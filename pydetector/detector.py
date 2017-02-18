@@ -10,8 +10,11 @@ from pydetector.regexp_checks import check_syntax_regex, check_modules_regex,\
 __all__ = ['detect']
 
 QUOTE_TRIPLE_SUBREGEX = re.compile(r'''\"{3}(.*?)\"{3}|'{3}(.*?)'{3}''', re.DOTALL)
-# awesome:
-QUOTE_SUBREGEX = re.compile(r"""(?![\\'])\"((?!\").)*(?!\\)\"(?!')|(?![\\\"])'((?!').)*(?!\\)'(?!\")""")
+QUOTE_SUBREGEX = re.compile(
+    r'''(?<!(\\|'))\".*(?<!\\)\"''' +
+    '|' +
+    r"""(?<!(\\|\"))'.*(?<!\\)'"""
+)
 COMMENT_SUBREGEX = re.compile(r"#.*$", re.MULTILINE)
 
 def remove_str_comments(code):
