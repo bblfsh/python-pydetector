@@ -31,6 +31,10 @@ def parse_args():
     parser.add_argument("files", nargs=argparse.REMAINDER, help="Files to parse")
 
     args = parser.parse_args()
+
+    if not args.files:
+        print('List of files to operate on missing')
+        parser.print_help()
     return args
 
 def main():
