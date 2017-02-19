@@ -4,7 +4,7 @@ import sys
 import subprocess
 from traceback import print_exc
 sys.path.insert(0, os.path.abspath(os.pardir))
-from pydetector.astexport import export_dict
+from pydetector.astexport import export_dict # noqa: E402
 
 __all__ = ['check_ast']
 
@@ -60,10 +60,10 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
     if not current_ok or try_other_on_sucess:
         # Write a tempfile with the code for the external interpreter
         cmd = [pyexec_other, "-c",
-                "import ast,astexport,sys;"
+                "import ast,pydetector.astexport,sys;"
                 "r=sys.stdin.read();"
                 "root=ast.parse(r);"
-                "print(astexport.export_dict(root))"]
+                "print(pydetector.astexport.export_dict(root))"]
 
         if verbosity > 1:
             print('Running in other Python:\n%s' % ' '.join(cmd))
@@ -74,7 +74,7 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
                 other_ast = ast.literal_eval(str(out))
                 other_ok = True
         except:
-            # other_ok remains false
+            other_ok = False
             if verbosity > 1:
                 print_exc()
 

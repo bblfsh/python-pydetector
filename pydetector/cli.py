@@ -1,9 +1,11 @@
-from pydetector.detector import detect
+import sys
+import argparse
+import subprocess
 from pprint import pprint
+from pydetector.detector import detect
 
 def parse_args():
     # TODO: add arguments for python executables
-    import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--verbosity", type=int, default=0,
             help="increase output verbosity (0 to 2)")
@@ -35,6 +37,26 @@ def parse_args():
     if not args.files:
         print('List of files to operate on missing')
         parser.print_help()
+        exit(1)
+
+    if args.testast and args.verbosity > 0:
+        PYMAJOR_CURRENT = sys.version_info[0]
+        PYMAJOR_OTHER = 2 if PYMAJOR_CURRENT == 3 else 3
+        if args.verbosity:
+            print('Running under Python%d, Python%d will be used for the '
+                   % (PYMAJOR_CURRENT, PYMAJOR_OTHER) + 'alternative AST tests.')
+
+        # Test that the other Python version have pydetect installed
+        try:
+            # TODO: change the python exec when I implement the option
+            # to specify the interpreter paths
+            subprocess.check_call(['python%d' % PYMAJOR_OTHER, '-c',
+                'from pydetector import ast_checks'])
+        except subprocess.CalledProcess:
+            print('Error: AST checks enabled but pydetector is not installed for ' +
+                    'Python%d.\nPlease install it and try again or disable AST checks'
+                    % PYMAJOR_OTHER)
+
     return args
 
 def main():
