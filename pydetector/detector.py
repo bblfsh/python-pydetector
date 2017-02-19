@@ -5,8 +5,6 @@ from pydetector.ast_checks import check_ast
 from pydetector.regexp_checks import check_syntax_regex, check_modules_regex,\
         check_modulesymbols_regex
 
-# TODO: more unittests with python 2 and 3 stdlibs. Test code matching every regex
-
 __all__ = ['detect']
 
 QUOTE_TRIPLE_SUBREGEX = re.compile(r'''\"{3}(.*?)\"{3}|'{3}(.*?)'{3}''', re.DOTALL)
