@@ -27,6 +27,8 @@ pip install git+https://github.com/juanjux/python-pydetector.git
 As a script:
 
 ```bash
+$ python3 -m pydetector --help
+
 usage: detector.py [-h] [-v VERBOSITY] [-d DEFAULTVERSION] [-a] [-o] [-n] [-m]
                    [-s]
                    ...
