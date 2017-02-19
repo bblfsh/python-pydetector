@@ -52,7 +52,10 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
     except:
         # current_ok remains false
         if verbosity > 1:
+            print('>>>> ASTCHECK: exception while parsing AST with Python%d:'
+                    % PYMAJOR_CURRENT)
             print_exc()
+            print('<<<< exception output end')
 
     if verbosity:
         print('AST extractable with version %d?: %s' % (PYMAJOR_CURRENT, str(current_ok)))
@@ -67,16 +70,28 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
 
         if verbosity > 1:
             print('Running in other Python:\n%s' % ' '.join(cmd))
+
+        err = None
         try:
             p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             out, err = p.communicate(code.encode('utf-8'))
             if p.returncode == 0:
-                other_ast = ast.literal_eval(str(out))
+                if PYMAJOR_CURRENT == 3:
+                    out = out.decode('utf-8')
+                other_ast = ast.literal_eval(out)
                 other_ok = True
+            elif verbosity > 1:
+                print('>>>> ASTCHECK: error while parsing AST with Python%d:'
+                        % PYMAJOR_OTHER)
+                print(err)
+                print('<<<< error output end')
         except:
             other_ok = False
             if verbosity > 1:
+                print('>>>> ASTCHECK: exception while parsing AST with Python%d:'
+                        % PYMAJOR_OTHER)
                 print_exc()
+                print('<<<< exception output end')
 
     if verbosity:
         print('AST extractable with version %d?: %s' % (PYMAJOR_OTHER, str(other_ok)))
