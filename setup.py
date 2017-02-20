@@ -15,28 +15,25 @@ with open("pydetector/version.py") as ver_file:
 with open(path.join(here, "README.md"), encoding="utf-8") as f:
     long_descr = f.read()
 
+version = main_ns['__version__']
 setup(
     name = "pydetector",
-    version = main_ns['__version__'],
+    version = version,
 
     description = description,
     long_description = long_descr,
     license = "MIT",
     url = "https://github.com/juanjux/python-pydetector",
-
+    download_url = "https://github.com/juanjux/python-pydetector/archive/%s.tar.gz" % version,
     author = "Juanjo Alvarez",
     author_email = "juanjo@juanjoalvarez.net",
-
     packages = find_packages(exclude=["tests"]),
-
     entry_points = {
         "console_scripts": [
             "pydetector = pydetector.cli:main"
         ]
     },
-
-    install_requires = [
-    ],
+    install_requires = [],
     extras_require = {
         "dev": [
             "six",
