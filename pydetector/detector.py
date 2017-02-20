@@ -137,7 +137,6 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
         # Remove comments and emptyfy strings before doing the regex tests,
         # this will remove most fase positives
         cleaned_code = remove_str_comments(input_code)
-        # print(cleaned_code); exit()
 
         if modules_checks:
             apply_score(*check_syntax_regex(cleaned_code, retdict['matches']))

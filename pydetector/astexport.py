@@ -64,8 +64,6 @@ class DictExportVisitor:
         else:
             return val
 
-    # Special visitors
-
     def visit_str(self, val):
         return str(val)
 
@@ -96,6 +94,7 @@ class DictExportVisitor:
 
 if __name__ == '__main__':
     import sys
+    from pprint import pprint
     f = sys.argv[1]
 
-    print(export_json(ast.parse(open(f).read()), pretty_print=True))
+    pprint(export_dict(ast.parse(open(f).read())))
