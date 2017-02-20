@@ -19,8 +19,12 @@ the [Babelfish](https://github.com/src-d/babelfish) project.
 Surprise:
 
 ```bash
-pip install git+https://github.com/juanjux/python-pydetector.git
+pip install pydetector
 ```
+
+Please note that in order for the AST tests to work with both Python
+versions you must install pydetector on both Pythons, even tough you
+only need to run it with one (better if that's Python3).
 
 ## Usage
 
