@@ -341,7 +341,7 @@ class DictExportVisitor(object):
         # Visit fields
         for field in node._fields:
             meth = getattr(
-                self, "visit_field_" + node_type,
+                self, "visit_" + node_type,
                 self.default_visit_field
             )
             args[field] = meth(getattr(node, field))
@@ -349,7 +349,7 @@ class DictExportVisitor(object):
         # Visit attributes
         for attr in node._attributes:
             meth = getattr(
-                self, "visit_attribute_" + node_type + "_" + attr,
+                self, "visit_" + node_type + "_" + attr,
                 self.default_visit_field
             )
             # Use None as default when lineno/col_offset are not set
@@ -393,18 +393,21 @@ class DictExportVisitor(object):
         # print('XXX [visit_NoneType] node_type: {}'.format(node_type))
         return 'None'
 
-    def visit_field_NameConstant(self, node):
+    # TODO: fix this
+    # def visit_Name(self, node):
+        # return self.visit_NameConstant(node)
+
+    def visit_NameConstant(self, node):
         node_type = node.__class__.__name__
         # print('XXX [visit_field_NameConstant] node_type: {}'.format(node_type))
-
-        if hasattr(node, 'value') and isinstance(node.value, bool):
+        if hasattr(node, 'value') and repr(node.value) in ('True', 'False'):
             return {
                     self.ast_type_field: "bool",
                     "b": node.value
             }
         return str(node)
 
-    def visit_field_Num(self, node):
+    def visit_Num(self, node):
         node_type = node.__class__.__name__
         # print('XXX [visit_field_Num] node_type: {}'.format(node_type))
 
