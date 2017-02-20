@@ -321,7 +321,7 @@ class DictExportVisitor(object):
     def parse(self):
         node = ast.parse(self.codestr, mode='exec')
         res = self.visit(node)
-        self.sync.check_strings()
+        # self.sync.check_strings()
         return res
 
     def visit(self, node):
