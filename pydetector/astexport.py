@@ -316,7 +316,7 @@ class DictExportVisitor(object):
         """
         # Instantiate the TSyncClass
         self.codestr = codestr
-        self.sync = tsync_class(codestr)
+        self.sync    = tsync_class(codestr)
 
     def parse(self):
         node = ast.parse(self.codestr, mode='exec')

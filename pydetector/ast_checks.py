@@ -46,8 +46,7 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
     pyexec_other = py2_exec if PYMAJOR_OTHER == 2 else py3_exec
 
     try:
-        rootnode = ast.parse(code)
-        current_ast = export_dict(rootnode)
+        current_ast = export_dict(code)
         current_ok = True
     except:
         # current_ok remains false
