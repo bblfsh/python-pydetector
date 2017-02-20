@@ -64,8 +64,7 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
         cmd = [pyexec_other, "-c",
                 "import ast,pydetector.astexport,sys;"
                 "r=sys.stdin.read();"
-                "root=ast.parse(r);"
-                "print(pydetector.astexport.export_dict(root))"]
+                "print(pydetector.astexport.export_dict(r))"]
 
         if verbosity > 1:
             print('Running in other Python:\n%s' % ' '.join(cmd))
