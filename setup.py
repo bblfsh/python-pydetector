@@ -33,13 +33,8 @@ setup(
             "pydetector = pydetector.cli:main"
         ]
     },
-    install_requires = [],
-    extras_require = {
-        "dev": [
-            "six",
-        ]
-    },
-
+    install_requires = ["six"],
+    extras_require = {},
     classifiers = [
         "Development Status :: 4 - Beta",
         "Environment :: Console",

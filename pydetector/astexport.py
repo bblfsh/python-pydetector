@@ -1,9 +1,6 @@
 # This module uses (modified) code from:
 # https://github.com/fpoli/python-astexport/blob/master/astexport/export.py
 # Hosted at: https://github.com/edreamleo/python-to-coffeescript
-
-# Released under the MIT License.
-
 import ast
 import sys
 import json
@@ -23,6 +20,7 @@ def export_json(codestr, pretty_print=False):
         indent=2 if pretty_print else 0,
         ensure_ascii=False
     )
+
 
 try:
     import msgpack
