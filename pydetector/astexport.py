@@ -326,13 +326,13 @@ class DictExportVisitor(object):
 
     def visit(self, node):
         node_type = node.__class__.__name__
-        # print('XXX node_type: {}'.format(node_type))
+        # print('INFO node_type: {}'.format(node_type))
         meth = getattr(self, "visit_" + node_type, self.default_visit)
         return meth(node)
 
     def default_visit(self, node):
         node_type = node.__class__.__name__
-        # print('XXX node_type: {}'.format(node_type))
+        # print('INFO node_type: {}'.format(node_type))
         # Add node type
         args = {
             self.ast_type_field: node_type
@@ -358,7 +358,7 @@ class DictExportVisitor(object):
 
     def default_visit_field(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_field] node_type: {}'.format(node_type))
+        # print('INFO [visit_field] node_type: {}'.format(node_type))
 
         if isinstance(node, ast.AST):
             return self.visit(node)
@@ -369,12 +369,12 @@ class DictExportVisitor(object):
 
     def visit_str(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_str] node_type: {}'.format(node_type))
-        return self.visit_Str(node)
+        # print('INFO [visit_str] node_type: {}'.format(node_type))
+        return str(node)
 
     def visit_Str(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_Str] node_type: {}'.format(node_type))
+        # print('INFO [visit_Str] node_type: {}'.format(node_type))
         return {
                 self.ast_type_field: "str",
                 "s": node.s
@@ -382,7 +382,7 @@ class DictExportVisitor(object):
 
     def visit_Bytes(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_Bytes] node_type: {}'.format(node_type))
+        # print('INFO [visit_Bytes] node_type: {}'.format(node_type))
         return {
                 self.ast_type_field: "bytes",
                 "s": node.s.decode()
@@ -390,7 +390,7 @@ class DictExportVisitor(object):
 
     def visit_NoneType(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_NoneType] node_type: {}'.format(node_type))
+        # print('INFO [visit_NoneType] node_type: {}'.format(node_type))
         return 'None'
 
     # TODO: fix this
@@ -399,7 +399,7 @@ class DictExportVisitor(object):
 
     def visit_NameConstant(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_field_NameConstant] node_type: {}'.format(node_type))
+        # print('INFO [visit_field_NameConstant] node_type: {}'.format(node_type))
         if hasattr(node, 'value') and repr(node.value) in ('True', 'False'):
             return {
                     self.ast_type_field: "bool",
@@ -409,7 +409,7 @@ class DictExportVisitor(object):
 
     def visit_Num(self, node):
         node_type = node.__class__.__name__
-        # print('XXX [visit_field_Num] node_type: {}'.format(node_type))
+        # print('INFO [visit_field_Num] node_type: {}'.format(node_type))
 
         if isinstance(node, int):
             return {
