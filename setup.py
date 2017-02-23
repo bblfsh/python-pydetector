@@ -6,14 +6,11 @@ from os import path
 
 here = path.abspath(path.dirname(__file__))
 
-description = "Python command line application & package to guess the Python version of a file"
+description = long_descr = "Python command line application & package to guess the Python version of a file"
 
 main_ns = {}
 with open("pydetector/version.py") as ver_file:
     exec(ver_file.read(), main_ns)
-
-with open(path.join(here, "README.md"), encoding="utf-8") as f:
-    long_descr = f.read()
 
 version = main_ns['__version__']
 setup(
