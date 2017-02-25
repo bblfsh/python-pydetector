@@ -30,6 +30,9 @@ def parse_args():
     parser.add_argument("-s", "--testmodulesyms", action="store_true", default=False,
             help="Test for version-specific module symbols (WARNING: SLOW!) (default=disabled)")
 
+    parser.add_argument("-A", "--showast", action="store_true", default=False,
+            help="Include the parsed AST")
+
     parser.add_argument("files", nargs=argparse.REMAINDER, help="Files to parse")
 
     args = parser.parse_args()
@@ -70,9 +73,11 @@ def main():
             stop_on_ok_ast=not args.asttestboth,
             verbosity=args.verbosity
             )
-    for fdata in returndict:
-        del returndict[fdata]['py2ast'] # not json serializable in the current form
-        del returndict[fdata]['py3ast'] # not json serializable in the current form
+
+    if not args.showast:
+        for fdata in returndict:
+            del returndict[fdata]['py2ast'] # not json serializable in the current form
+            del returndict[fdata]['py3ast'] # not json serializable in the current form
 
     pprint(returndict)
 

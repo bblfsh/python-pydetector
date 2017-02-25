@@ -7,6 +7,7 @@ import json
 import types
 import tokenize
 import token as token_module
+from codecs import encode
 
 isPython3 = sys.version_info >= (3, 0, 0)
 
@@ -20,7 +21,6 @@ def export_json(codestr, pretty_print=False):
         indent=2 if pretty_print else 0,
         ensure_ascii=False
     )
-
 
 try:
     import msgpack
@@ -312,9 +312,8 @@ class DictExportVisitor(object):
             methods "leading_lines", "leading_string", "trailing_comment", "trailing_lines"
             and "sync_strings". By default astexport.TokenSync will be used.
         """
-        # Instantiate the TSyncClass
-        self.codestr = codestr
-        self.sync    = tsync_class(codestr)
+        self.codestr      = codestr
+        self.sync         = tsync_class(codestr)
 
     def parse(self):
         node = ast.parse(self.codestr, mode='exec')
@@ -381,9 +380,19 @@ class DictExportVisitor(object):
     def visit_Bytes(self, node):
         node_type = node.__class__.__name__
         # print('INFO [visit_Bytes] node_type: {}'.format(node_type))
+
+        try:
+            s = node.s.decode()
+            encoding = 'utf8'
+        except UnicodeDecodeError:
+            # try with base64
+            s = encode(node.s, 'base64').decode().strip()
+            encoding = 'base64'
+
         return {
                 self.ast_type_field: "bytes",
-                "s": node.s.decode()
+                "s": s,
+                "encoding": encoding,
         }
 
     def visit_NoneType(self, node):
