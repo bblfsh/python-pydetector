@@ -173,7 +173,8 @@ def check_modules_regex(code, matches, match_score=100):
     Args:
         code (str): The code
         matches (List[Tuple[str, str]]): the list of matching rules. It will
-        be modified in-place
+            be modified in-place
+        match_score: the score given for a match with this test
 
     Returns:
         A tuple with the py3_score and the py2_score
