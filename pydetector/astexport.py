@@ -284,8 +284,8 @@ class DictExportVisitor(object):
 
     def visit_Str(self, node):
         return {
-            self.ast_type_field: "str",
-            "s": node.s
+            self.ast_type_field: "StringLiteral",
+            "LiteralValue": node.s
         }
 
     def visit_Bytes(self, node):
@@ -298,39 +298,46 @@ class DictExportVisitor(object):
             encoding = 'base64'
 
         return {
-            self.ast_type_field: "bytes",
-            "s": s,
+            self.ast_type_field: "ByteLiteral",
+            "LiteralValue": s,
             "encoding": encoding,
         }
 
     def visit_NoneType(self, node):
-        return 'None'
+        return 'NoneLiteral'
 
     def visit_NameConstant(self, node):
-        if hasattr(node, 'value') and repr(node.value) in ('True', 'False'):
-            return {
-                self.ast_type_field: "bool",
-                "b": node.value
-            }
+        if hasattr(node, 'value'):
+            repr_val = repr(node.value)
+            if repr_val in ('True', 'False'):
+                return {
+                    self.ast_type_field: "BoolLiteral",
+                    "LiteralValue": node.value
+                }
+            elif repr_val == 'None':
+                return {
+                    self.ast_type_field: "NoneLiteral",
+                    "LiteralValue": node.value
+                }
         return str(node)
 
     def visit_Num(self, node):
+        retDict = {self.ast_type_field: "NumLiteral"}
         if isinstance(node.n, int):
-            return {
-                self.ast_type_field: "int",
-                "n": node.n
-            }
+            return retDict.update({
+                "NumType": "int",
+                "LiteralValue": node.n
+            })
         elif isinstance(node.n, float):
-            return {
-                self.ast_type_field: "float",
-                "n": node.n
-            }
+            return retDict.update({
+                "NumType": "float",
+                "Literal": node.n
+            })
         elif isinstance(node.n, complex):
-            return {
-                self.ast_type_field: "complex",
-                "n": node.n.real,
-                "i": node.n.imag
-            }
+            return retDict.update({
+                "NumType": "complex",
+                "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
+            })
 
 
 if __name__ == '__main__':

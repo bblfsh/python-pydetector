@@ -61,7 +61,7 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
         print('AST extractable with version %d?: %s' % (PYMAJOR_CURRENT, str(current_ok)))
 
     if not current_ok or try_other_on_sucess:
-        # Write a tempfile with the code for the external interpreter
+        # Open an external interpreter and try to export its AST
         cmd = [pyexec_other, "-c",
                "import ast,pydetector.astexport,sys;"
                "r=sys.stdin.read();"
