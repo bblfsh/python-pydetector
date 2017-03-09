@@ -37,7 +37,11 @@ class Test20Detect(unittest.TestCase):
         )
 
     def test_detect_both(self):
-        with open(__file__) as this:
+        # avoid pyc and pyo extensions
+        f = __file__[:-1] if not __file__.endswith('.py') else __file__
+        with open(f) as this:
+            # this code should remain compatible with Python 2 and 3
+            # so this test actually also check this
             code = this.read()
 
         self._check_res(

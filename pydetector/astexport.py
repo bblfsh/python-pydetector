@@ -7,6 +7,8 @@ from six import StringIO
 from codecs import encode
 from pprint import pprint
 
+# TODO: add an option to not change the node names of NameConstant, Num and Str
+
 def export_dict(codestr):
     visitor = DictExportVisitor(codestr)
     return visitor.parse()
