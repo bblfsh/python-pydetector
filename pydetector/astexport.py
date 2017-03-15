@@ -16,7 +16,7 @@ def export_dict(codestr):
 
 def export_json(codestr, pretty_print=False):
     import json
-    dict_ = export_dict(codestr),
+    dict_ = export_dict(codestr)
     json_ = json.dumps(dict_, indent=2 if pretty_print else 0, ensure_ascii=False)
     return json_, dict_
 
@@ -349,5 +349,6 @@ if __name__ == '__main__':
 
     with open(f) as codefile:
         content = codefile.read()
-    pprint(export_dict(content))
+    # pprint(export_dict(content))
+    print(export_json(content, pretty_print=True)[0])
     # export_graphviz(content)

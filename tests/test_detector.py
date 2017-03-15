@@ -2,6 +2,7 @@ import unittest
 from textwrap import dedent
 from pydetector.detector import remove_str_comments, detect
 
+# TODO: check the generated AST!
 
 class Test20Detect(unittest.TestCase):
     def _check_res(self, res, version, score=None, ast2check=False, ast3check=False):

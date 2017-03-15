@@ -121,8 +121,8 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
                         verbosity=verbosity
             )
             retdict.update({
-                'py2ast': py2astroot,
-                'py3ast': py3astroot,
+                'py2ast': {'PY2AST': py2astroot},
+                'py3ast': {'PY3AST': py3astroot},
                 'matches': [('PY%dASTOK' % astversion, ())]
             })
 
@@ -130,9 +130,6 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
             if astversion in (2, 3):
                 retdict['version'] = astversion
                 continue
-            else:
-                retdict['py2ast'] = py2astroot
-                retdict['py3ast'] = py3astroot
 
         # Remove comments and emptyfy strings before doing the regex tests,
         # this will remove most fase positives
@@ -162,3 +159,10 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
             print('\n')
 
     return returndict
+
+if __name__ == '__main__':
+    from pprint import pprint
+    with open(__file__) as f:
+        code = f.read()
+    pprint(detect(codestr=code, stop_on_ok_ast=True))
+
