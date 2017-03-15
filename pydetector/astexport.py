@@ -229,19 +229,28 @@ class DictExportVisitor(object):
             # last node and this one
             noops_previous = self.sync.previous_nooplines(node)
             if noops_previous:
-                visit_result['noops_previous'] = noops_previous
+                visit_result['noops_previous'] = {
+                    "ast_type": "PreviousNoops",
+                    "text": noops_previous
+                }
 
             # Other noops at the end of its significative line except the implicit
             # finishing newline
             noops_sameline = self.sync.remainder_noops_sameline(node)
             if noops_sameline:
-                visit_result['noops_sameline'] = noops_sameline
+                visit_result['noops_sameline'] = {
+                    "ast_type": "SameLineNoops",
+                    "text": noops_sameline
+                }
 
             # Finally, if this is the root node, add all noops after the last op node
             if root:
                 noops_remainder = self.sync.remainder_noops()
                 if noops_remainder:
-                    visit_result['noops_remainder'] = noops_remainder
+                    visit_result['noops_remainder'] = {
+                        "ast_type": "RemainderNoops",
+                        "text": noops_remainder
+                    }
         return visit_result
 
     def visit_other(self, node):
