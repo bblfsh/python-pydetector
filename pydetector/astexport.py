@@ -231,7 +231,7 @@ class DictExportVisitor(object):
             if noops_previous:
                 visit_result['noops_previous'] = {
                     "ast_type": "PreviousNoops",
-                    "text": noops_previous
+                    "lines": [{"l": noopline} for noopline in noops_previous]
                 }
 
             # Other noops at the end of its significative line except the implicit
@@ -240,7 +240,7 @@ class DictExportVisitor(object):
             if noops_sameline:
                 visit_result['noops_sameline'] = {
                     "ast_type": "SameLineNoops",
-                    "text": noops_sameline
+                    "lines": [{"l": noopline} for noopline in noops_sameline]
                 }
 
             # Finally, if this is the root node, add all noops after the last op node
@@ -249,7 +249,7 @@ class DictExportVisitor(object):
                 if noops_remainder:
                     visit_result['noops_remainder'] = {
                         "ast_type": "RemainderNoops",
-                        "text": noops_remainder
+                        "lines": [{"l": noopline} for noopline in noops_remainder]
                     }
         return visit_result
 
