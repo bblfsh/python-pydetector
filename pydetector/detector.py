@@ -164,6 +164,7 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
 
 if __name__ == '__main__':
     from pprint import pprint
-    with open(__file__) as f:
+    with open('astexport.py') as f:
         code = f.read()
-    pprint(detect(codestr=code, stop_on_ok_ast=True))
+    # code = 'wtf lol'
+    pprint(detect(codestr=code, stop_on_ok_ast=False))

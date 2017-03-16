@@ -190,6 +190,21 @@ class NoopExtractor(object):
         self.current_line = i
         return trailing
 
+def node_dict(node, newdict, ast_type=None):
+    """
+    Shortcut that adds ast_type (if not specified),
+    lineno and col_offset to the node-derived dictionary
+    """
+    if ast_type is None:
+        ast_type = node.__class__.__name__
+
+    newdict["ast_type"] = ast_type
+    if hasattr(node, "lineno"):
+        newdict["lineno"] = node.lineno
+    if hasattr(node, "col_offset"):
+        newdict["col_offset"] = node.col_offset
+
+    return newdict
 
 class DictExportVisitor(object):
     ast_type_field = "ast_type"
@@ -219,8 +234,15 @@ class DictExportVisitor(object):
         res = self.visit(node, root=True)
         return res
 
+
     def visit(self, node, root=False):
         node_type = node.__class__.__name__
+        # the ctx property always has a "Load"/"Store"/etc nodes that
+        # can be perfectly converted to a string value since they don't
+        # hold anything more than the name
+        if hasattr(node, 'ctx'):
+            node.ctx = node.ctx.__class__.__name__
+
         meth = getattr(self, "visit_" + node_type, self.visit_other)
         visit_result = meth(node)
 
@@ -231,7 +253,7 @@ class DictExportVisitor(object):
             if noops_previous:
                 visit_result['noops_previous'] = {
                     "ast_type": "PreviousNoops",
-                    "lines": [{"l": noopline} for noopline in noops_previous]
+                    "lines": [{"ast_type": "NoopLine", "l": noopline} for noopline in noops_previous]
                 }
 
             # Other noops at the end of its significative line except the implicit
@@ -240,7 +262,7 @@ class DictExportVisitor(object):
             if noops_sameline:
                 visit_result['noops_sameline'] = {
                     "ast_type": "SameLineNoops",
-                    "lines": [{"l": noopline} for noopline in noops_sameline]
+                    "lines": [{"ast_type": "NoopLine", "l": noopline} for noopline in noops_sameline]
                 }
 
             # Finally, if this is the root node, add all noops after the last op node
@@ -249,7 +271,7 @@ class DictExportVisitor(object):
                 if noops_remainder:
                     visit_result['noops_remainder'] = {
                         "ast_type": "RemainderNoops",
-                        "lines": [{"l": noopline} for noopline in noops_remainder]
+                        "lines": [{"ast_type": "NoopLine", "l": noopline} for noopline in noops_remainder]
                     }
         return visit_result
 
@@ -316,6 +338,29 @@ class DictExportVisitor(object):
 
     def visit_NoneType(self, node):
         return 'NoneLiteral'
+
+    def visit_Global(self, node):
+        # Python AST by default stores global and nonlocal variable names
+        # in a "names" array of strings. That breaks the structure of everything
+        # else in the AST (dictionaries, properties or list of objects) so we
+        # convert those names to Name objects
+
+        names_as_nodes = [{"ast_type": "Name",
+                          "id": i,
+                          "lineno": node.lineno,
+                          "col_offset": node.col_offset} for i in node.names]
+        from pprint import pprint
+        pprint(node_dict(node, {"names": names_as_nodes}, ast_type="Global"))
+        return node_dict(node, {"names": names_as_nodes}, ast_type="Global")
+
+    def visit_Nonlocal(self, node):
+        # ditto
+        names_as_nodes = [{"ast_type": "Name",
+                          "id": i,
+                          "lineno": node.lineno,
+                          "col_offset": node.col_offset} for i in node.names]
+        return node_dict(node, {"names": names_as_nodes}, ast_type="Nonlocal")
+
 
     def visit_NameConstant(self, node):
         if hasattr(node, 'value'):
