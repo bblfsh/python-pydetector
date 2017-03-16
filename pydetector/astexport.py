@@ -349,8 +349,6 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        from pprint import pprint
-        pprint(node_dict(node, {"names": names_as_nodes}, ast_type="Global"))
         return node_dict(node, {"names": names_as_nodes}, ast_type="Global")
 
     def visit_Nonlocal(self, node):
