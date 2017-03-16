@@ -376,22 +376,23 @@ class DictExportVisitor(object):
         return str(node)
 
     def visit_Num(self, node):
-        retDict = {self.ast_type_field: "NumLiteral"}
         if isinstance(node.n, int):
-            return retDict.update({
-                "NumType": "int",
-                "LiteralValue": node.n
-            })
+            retDict = {
+                    "NumType": "int",
+                    "LiteralValue": node.n
+                    }
         elif isinstance(node.n, float):
-            return retDict.update({
-                "NumType": "float",
-                "Literal": node.n
-            })
+            retDict = {
+                    "NumType": "float",
+                    "LiteralValue": node.n
+                    }
         elif isinstance(node.n, complex):
-            return retDict.update({
-                "NumType": "complex",
-                "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
-            })
+            retDict = {
+                    "NumType": "complex",
+                    "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
+                    }
+
+        return node_dict(node, retDict, ast_type="NumLiteral")
 
 
 if __name__ == '__main__':
