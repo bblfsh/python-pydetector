@@ -262,7 +262,7 @@ class DictExportVisitor(object):
             if noops_sameline:
                 visit_result['noops_sameline'] = {
                     "ast_type": "SameLineNoops",
-                    "lines": [{"ast_type": "NoopLine", "l": noopline} for noopline in noops_sameline]
+                    "lines": noops_sameline,
                 }
 
             # Finally, if this is the root node, add all noops after the last op node
