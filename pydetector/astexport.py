@@ -154,14 +154,23 @@ class NoopExtractor(object):
     def previous_nooplines(self, node):
         """Return a list of the preceding comment and blank lines"""
         previous = []
+        noop_first_lineno = None
+        noop_last_lineno = None
+
         if hasattr(node, 'lineno'):
             while self.current_line < node.lineno:
                 token = self.astmissing_lines[self.current_line]
                 if token:
                     s = token[TOKEN_RAWVALUE].rstrip() + '\n'
                     previous.append(s)
+
+                    # take only the first line of the noops as the start and the last
+                    # one (overwriteen every iteration)
+                    if not noop_first_lineno:
+                        noop_first_lineno = self.current_line
+                    noop_last_lineno = self.current_line
                 self.current_line += 1
-        return previous
+        return previous, noop_first_lineno, noop_last_lineno
 
     def remainder_noops_sameline(self, node):
         """
@@ -188,15 +197,20 @@ class NoopExtractor(object):
     def remainder_noops(self):
         """return any remaining ignored lines."""
         trailing = []
+        noop_last_lineno = None
         i = self.current_line
+        noop_first_lineno = self.current_line
+
         while i < len(self.astmissing_lines):
             token = self.astmissing_lines[i]
             if token:
                 s = token[TOKEN_RAWVALUE]
                 trailing.append(s)
+
+            noop_last_lineno = i
             i += 1
         self.current_line = i
-        return trailing
+        return trailing, noop_first_lineno, noop_last_lineno
 
 def node_dict(node, newdict, ast_type=None):
     """
@@ -257,10 +271,12 @@ class DictExportVisitor(object):
         if isinstance(visit_result, dict):
             # Add all the noop (whitespace and comments) lines between the
             # last node and this one
-            noops_previous = self.sync.previous_nooplines(node)
+            noops_previous, startline, endline = self.sync.previous_nooplines(node)
             if noops_previous:
                 visit_result['noops_previous'] = {
                     "ast_type": "PreviousNoops",
+                    "lineno": startline,
+                    "end_lineno": endline,
                     "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_previous]
                 }
 
@@ -270,15 +286,18 @@ class DictExportVisitor(object):
             if noops_sameline:
                 visit_result['noops_sameline'] = {
                     "ast_type": "SameLineNoops",
+                    "lineno": node.lineno if hasattr(node, "lineno") else 0,
                     "noop_line": noops_sameline,
                 }
 
             # Finally, if this is the root node, add all noops after the last op node
             if root:
-                noops_remainder = self.sync.remainder_noops()
+                noops_remainder, startline, endline = self.sync.remainder_noops()
                 if noops_remainder:
                     visit_result['noops_remainder'] = {
                         "ast_type": "RemainderNoops",
+                        "lineno": startline,
+                        "end_lineno": endline,
                         "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_remainder]
                     }
         return visit_result
