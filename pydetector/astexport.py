@@ -96,6 +96,12 @@ class NoopExtractor(object):
         self.all_lines = self._create_tokenized_lines(tokens, codestr)
         self.astmissing_lines = self._create_astmissing_lines()
 
+        # This set is used to avoid adding the "same line-remainder noops" nodes as a child
+        # of every "real" node to avoid having this node duplicated on all semantic
+        # nodes in the same line, thus avoiding duplication. It will contain just the
+        # line numbers of already added sameline_noops
+        self._sameline_added_noops = set()
+
     def _create_astmissing_lines(self):
         """
         Return a copy of line_tokens containing lines ignored by the AST
@@ -162,7 +168,7 @@ class NoopExtractor(object):
         Return a string containing the trailing (until EOL) noops for the
         node, if any. The ending newline is implicit and thus not returned
         """
-        if not hasattr(node, 'lineno'):
+        if not hasattr(node, 'lineno') or node.lineno in self._sameline_added_noops:
             return ''
 
         tokens = self.all_lines[node.lineno - 1]
@@ -175,6 +181,8 @@ class NoopExtractor(object):
                 trailing = []
             else:
                 trailing.append(token[TOKEN_VALUE])
+
+        self._sameline_added_noops.add(node.lineno)
         return ''.join(trailing[:-1])
 
     def remainder_noops(self):
