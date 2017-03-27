@@ -393,12 +393,16 @@ class DictExportVisitor(object):
             if repr_val in ('True', 'False'):
                 return {
                     self.ast_type_field: "BoolLiteral",
-                    "LiteralValue": node.value
+                    "LiteralValue": node.value,
+                    "lineno": node.lineno,
+                    "col_offset": node.col_offset
                 }
             elif repr_val == 'None':
                 return {
                     self.ast_type_field: "NoneLiteral",
-                    "LiteralValue": node.value
+                    "LiteralValue": node.value,
+                    "lineno": node.lineno,
+                    "col_offset": node.col_offset
                 }
         return str(node)
 
