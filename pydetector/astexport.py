@@ -343,10 +343,7 @@ class DictExportVisitor(object):
         return str(node)
 
     def visit_Str(self, node):
-        return {
-            self.ast_type_field: "StringLiteral",
-            "LiteralValue": node.s
-        }
+        return node_dict(node, {"LiteralValue": node.s}, ast_type="StringLiteral")
 
     def visit_Bytes(self, node):
         try:
@@ -357,11 +354,7 @@ class DictExportVisitor(object):
             s = encode(node.s, 'base64').decode().strip()
             encoding = 'base64'
 
-        return {
-            self.ast_type_field: "ByteLiteral",
-            "LiteralValue": s,
-            "encoding": encoding,
-        }
+        return node_dict(node, {"LiteralValue": s, "encoding": encoding}, ast_type="ByteLiteral")
 
     def visit_NoneType(self, node):
         return 'NoneLiteral'
@@ -391,19 +384,9 @@ class DictExportVisitor(object):
         if hasattr(node, 'value'):
             repr_val = repr(node.value)
             if repr_val in ('True', 'False'):
-                return {
-                    self.ast_type_field: "BoolLiteral",
-                    "LiteralValue": node.value,
-                    "lineno": node.lineno,
-                    "col_offset": node.col_offset
-                }
+                return node_dict(node, {"LiteralValue": node.value}, ast_type="BoolLiteral")
             elif repr_val == 'None':
-                return {
-                    self.ast_type_field: "NoneLiteral",
-                    "LiteralValue": node.value,
-                    "lineno": node.lineno,
-                    "col_offset": node.col_offset
-                }
+                return node_dict(node, {"LiteralValue": node.value}, ast_type="NoneLiteral")
         return str(node)
 
     def visit_Num(self, node):
