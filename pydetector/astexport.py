@@ -259,6 +259,12 @@ class DictExportVisitor(object):
 
     def visit(self, node, root=False):
         node_type = node.__class__.__name__
+
+        if node_type == 'Module':
+            # add line and col
+            node.__dict__['lineno'] = 0
+            node.__dict__['col_offset'] = 0
+
         # the ctx property always has a "Load"/"Store"/etc nodes that
         # can be perfectly converted to a string value since they don't
         # hold anything more than the name
@@ -300,38 +306,51 @@ class DictExportVisitor(object):
                         "end_lineno": endline,
                         "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_remainder]
                     }
+        assert type(visit_result) in (dict, list, tuple)
+        if isinstance(visit_result, dict):
+            assert 'lineno' in visit_result and 'col_offset' in visit_result
         return visit_result
 
     def visit_other(self, node):
         node_type = node.__class__.__name__
 
-        node_dict = {
-            self.ast_type_field: node_type
-        }
+        nodedict = node_dict(node, {}, ast_type = node_type)
 
         # Visit fields
         for field in node._fields:
-            meth = getattr(
-                self, "visit_" + node_type,
-                self.visit_other_field
-            )
-            node_dict[field] = meth(getattr(node, field))
+            meth = getattr(self, "visit_" + node_type, None)
+            if meth:
+                # visit_other_field handles tokens without lineno and col_offset among others
+                # we add it from the parent to the tokens that doesnt have them (operators)
+                nodedict[field] = meth(getattr(node, field))
+            else:
+                nodedict[field] = self.visit_other_field(getattr(node, field), node.lineno, node.col_offset)
+
 
         # Visit attributes
         for attr in node._attributes:
-            meth = getattr(
-                self, "visit_" + node_type + "_" + attr,
-                self.visit_other_field
-            )
-            # Use None as default when lineno/col_offset are not set
-            node_dict[attr] = meth(getattr(node, attr, None))
-        return node_dict
+            meth = getattr(self, "visit_" + node_type + "_" + attr, None)
+            if meth:
+                # see above
+                nodedict[attr] = meth(getattr(node, attr))
+            else:
+                nodedict[attr] = self.visit_other_field(getattr(node, attr), node.lineno, node.col_offset)
 
-    def visit_other_field(self, node):
+        return nodedict
+
+    def visit_other_field(self, node, parent_lineno, parent_col_offset):
         if isinstance(node, ast.AST):
             return self.visit(node)
         elif isinstance(node, list) or isinstance(node, tuple):
-            return [self.visit(x) for x in node]
+            res = []
+            for x in node:
+                if not hasattr(node, 'lineno'):
+                    # operators dont have lineno en Python AST, add it from the parent
+                    x.__dict__['lineno'] = parent_lineno
+                    x.__dict__['col_offset'] = parent_col_offset
+                visit_res = self.visit(x)
+                res.append(visit_res)
+            return res
         else:
             return node
 
