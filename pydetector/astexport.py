@@ -250,10 +250,26 @@ class DictExportVisitor(object):
         """
         self.codestr = codestr
         self.sync = tsync_class(codestr)
+        # this is used to store the parent node of the current one; currently is only
+        # used to inherit the lineno and col_offset of the parent for "arguments" and
+        # "Operator" types
+        self._current_parent = None
 
     def _addNoopFields(self, node, visit_dict, root):
         if not isinstance(visit_dict, dict):
             return visit_dict
+
+        def _create_nooplines_list(startline, noops_previous):
+            nooplines = []
+            curline = startline
+            for noopline in noops_previous:
+                nooplines.append({
+                    'ast_type': 'NoopLine',
+                    'noop_line': noopline,
+                    'lineno': curline,
+                })
+            return nooplines
+
 
         # Add all the noop (whitespace and comments) lines between the
         # last node and this one
@@ -263,7 +279,7 @@ class DictExportVisitor(object):
                 "ast_type": "PreviousNoops",
                 "lineno": startline,
                 "end_lineno": endline,
-                "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_previous]
+                "lines": _create_nooplines_list(startline, noops_previous)
             }
 
         # Other noops at the end of its significative line except the implicit
@@ -284,7 +300,7 @@ class DictExportVisitor(object):
                     "ast_type": "RemainderNoops",
                     "lineno": startline,
                     "end_lineno": endline,
-                    "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_remainder]
+                    "lines": _create_nooplines_list(startline, noops_remainder)
                 }
 
 
@@ -312,50 +328,50 @@ class DictExportVisitor(object):
         visit_result = meth(node)
         self._addNoopFields(node, visit_result, root)
 
+        if 'col_offset' in visit_result:
+            # Python AST gives a 0 based column, I prefer a 1-based one
+            visit_result['col_offset'] += 1
+
         return visit_result
 
     def visit_other(self, node):
         node_type = node.__class__.__name__
-
         nodedict = node_dict(node, {}, ast_type = node_type)
 
         # Visit fields
         for field in node._fields:
-            meth = getattr(self, "visit_" + node_type, None)
-            if meth:
-                # visit_other_field handles tokens without lineno and col_offset among others
-                # we add it from the parent to the tokens that doesnt have them (operators)
-                nodedict[field] = meth(getattr(node, field))
-            else:
-                nodedict[field] = self.visit_other_field(getattr(node, field), node.lineno, node.col_offset)
+            meth = getattr(self, "visit_" + node_type, self.visit_other_field)
+            nodedict[field] = meth(getattr(node, field))
 
+            # these must inherit their position from the parent
+            # FIXME: move to a method
+            if field in ('args', 'op', 'ops', 'alias', 'keywords'):
+                if isinstance(nodedict[field], dict):
+                    toprocess = [nodedict[field]]
+                elif isinstance(nodedict[field], list):
+                    toprocess = nodedict[field]
+                else:
+                    continue
+
+                for proc in toprocess:
+                    if 'lineno' not in proc and hasattr(node, 'lineno'):
+                        proc['lineno'] = node.lineno
+                    # doesnt make sense to inherit col_offset since it would be different
 
         # Visit attributes
         for attr in node._attributes:
-            meth = getattr(self, "visit_" + node_type + "_" + attr, None)
-            if meth:
-                # see above
-                nodedict[attr] = meth(getattr(node, attr))
-            else:
-                nodedict[attr] = self.visit_other_field(getattr(node, attr), node.lineno, node.col_offset)
+            meth = getattr(self, "visit_" + node_type + "_" + attr, self.visit_other_field)
+            nodedict[attr] = meth(getattr(node, attr))
 
         return nodedict
 
-    def visit_other_field(self, node, parent_lineno, parent_col_offset):
+    def visit_other_field(self, node):
         if isinstance(node, ast.AST):
             return self.visit(node)
         elif isinstance(node, list) or isinstance(node, tuple):
-            res = []
-            for x in node:
-                if not hasattr(x, 'lineno'):
-                    # operators dont have lineno en Python AST, add it from the parent
-                    x.__dict__['lineno'] = parent_lineno
-                if not hasattr(x, 'col_offset'): # ditto
-                    x.__dict__['col_offset'] = parent_col_offset
-                visit_res = self.visit(x)
-                res.append(visit_res)
-            return res
+            return [self.visit(x) for x in node]
         else:
+            # string attribute
             return node
 
     def visit_str(self, node):
