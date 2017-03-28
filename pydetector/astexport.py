@@ -5,7 +5,7 @@ import tokenize
 import token as token_module
 from six import StringIO
 from codecs import encode
-from pprint import pprint
+# from pprint import pprint
 
 # TODO: add an option to not change the node names of NameConstant, Num and Str
 
@@ -251,6 +251,43 @@ class DictExportVisitor(object):
         self.codestr = codestr
         self.sync = tsync_class(codestr)
 
+    def _addNoopFields(self, node, visit_dict, root):
+        if not isinstance(visit_dict, dict):
+            return visit_dict
+
+        # Add all the noop (whitespace and comments) lines between the
+        # last node and this one
+        noops_previous, startline, endline = self.sync.previous_nooplines(node)
+        if noops_previous:
+            visit_dict['noops_previous'] = {
+                "ast_type": "PreviousNoops",
+                "lineno": startline,
+                "end_lineno": endline,
+                "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_previous]
+            }
+
+        # Other noops at the end of its significative line except the implicit
+        # finishing newline
+        noops_sameline = self.sync.remainder_noops_sameline(node)
+        if noops_sameline:
+            visit_dict['noops_sameline'] = {
+                "ast_type": "SameLineNoops",
+                "lineno": node.lineno if hasattr(node, "lineno") else 0,
+                "noop_line": noops_sameline,
+            }
+
+        # Finally, if this is the root node, add all noops after the last op node
+        if root:
+            noops_remainder, startline, endline = self.sync.remainder_noops()
+            if noops_remainder:
+                visit_dict['noops_remainder'] = {
+                    "ast_type": "RemainderNoops",
+                    "lineno": startline,
+                    "end_lineno": endline,
+                    "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_remainder]
+                }
+
+
     def parse(self):
         node = ast.parse(self.codestr, mode='exec')
         res = self.visit(node, root=True)
@@ -261,8 +298,8 @@ class DictExportVisitor(object):
         node_type = node.__class__.__name__
 
         if node_type == 'Module':
-            # add line and col
-            node.__dict__['lineno'] = 0
+            # add line and col since Python doesnt adds them
+            node.__dict__['lineno'] = 1
             node.__dict__['col_offset'] = 0
 
         # the ctx property always has a "Load"/"Store"/etc nodes that
@@ -273,42 +310,8 @@ class DictExportVisitor(object):
 
         meth = getattr(self, "visit_" + node_type, self.visit_other)
         visit_result = meth(node)
+        self._addNoopFields(node, visit_result, root)
 
-        if isinstance(visit_result, dict):
-            # Add all the noop (whitespace and comments) lines between the
-            # last node and this one
-            noops_previous, startline, endline = self.sync.previous_nooplines(node)
-            if noops_previous:
-                visit_result['noops_previous'] = {
-                    "ast_type": "PreviousNoops",
-                    "lineno": startline,
-                    "end_lineno": endline,
-                    "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_previous]
-                }
-
-            # Other noops at the end of its significative line except the implicit
-            # finishing newline
-            noops_sameline = self.sync.remainder_noops_sameline(node)
-            if noops_sameline:
-                visit_result['noops_sameline'] = {
-                    "ast_type": "SameLineNoops",
-                    "lineno": node.lineno if hasattr(node, "lineno") else 0,
-                    "noop_line": noops_sameline,
-                }
-
-            # Finally, if this is the root node, add all noops after the last op node
-            if root:
-                noops_remainder, startline, endline = self.sync.remainder_noops()
-                if noops_remainder:
-                    visit_result['noops_remainder'] = {
-                        "ast_type": "RemainderNoops",
-                        "lineno": startline,
-                        "end_lineno": endline,
-                        "lines": [{"ast_type": "NoopLine", "noop_line": noopline} for noopline in noops_remainder]
-                    }
-        assert type(visit_result) in (dict, list, tuple)
-        if isinstance(visit_result, dict):
-            assert 'lineno' in visit_result and 'col_offset' in visit_result
         return visit_result
 
     def visit_other(self, node):
@@ -344,9 +347,10 @@ class DictExportVisitor(object):
         elif isinstance(node, list) or isinstance(node, tuple):
             res = []
             for x in node:
-                if not hasattr(node, 'lineno'):
+                if not hasattr(x, 'lineno'):
                     # operators dont have lineno en Python AST, add it from the parent
                     x.__dict__['lineno'] = parent_lineno
+                if not hasattr(x, 'col_offset'): # ditto
                     x.__dict__['col_offset'] = parent_col_offset
                 visit_res = self.visit(x)
                 res.append(visit_res)
