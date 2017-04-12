@@ -1,26 +1,36 @@
+"""
+Export an improved version of the Python AST for the given codestr
+as a Python Dictionary or JSON object
+"""
 from __future__ import print_function
 
 import ast
 import tokenize
 import token as token_module
-from six import StringIO
 from codecs import encode
+from six import StringIO
 # from pprint import pprint
 
 # TODO: add an option to not change the node names of NameConstant, Num and Str
 
+
 def export_dict(codestr):
+    """ Returns the AST as a Python dictionary """
     visitor = DictExportVisitor(codestr)
     return visitor.parse()
 
 
 def export_json(codestr, pretty_print=False):
+    """ Returns the AST as a JSON object """
     import json
     dict_ = {'AST': export_dict(codestr)}
     json_ = json.dumps(dict_, indent=2 if pretty_print else 0, ensure_ascii=False)
     return json_, dict_
 
-namecounter = 0
+
+NAMECOUNTER = 0
+
+
 def export_graphviz(codestr):
     """
     WARNING: Experimental, only compatible with Python 3 and unfinished
@@ -33,10 +43,10 @@ def export_graphviz(codestr):
 
     # These nodes will show their childs as hanging from their parent
     def generate(dot, obj, parent=None, reparent=False):
-        global namecounter
+        global NAMECOUNTER
 
-        namecounter += 1
-        nodename = str(namecounter)
+        NAMECOUNTER += 1
+        nodename = str(NAMECOUNTER)
 
         def get_name(node):
             subname = ''
@@ -82,6 +92,7 @@ def export_graphviz(codestr):
 TOKEN_VALUE = 1
 TOKEN_RAWVALUE = 4
 NOOP_TOKENS_LINE = {'COMMENT', 'INDENT', 'NL', 'NEWLINE'}
+
 
 class NoopExtractor(object):
     """
@@ -177,7 +188,19 @@ class NoopExtractor(object):
         Return a string containing the trailing (until EOL) noops for the
         node, if any. The ending newline is implicit and thus not returned
         """
-        if not hasattr(node, 'lineno') or node.lineno in self._sameline_added_noops:
+
+        # Without a line number for the node we can't know
+        if not hasattr(node, 'lineno'):
+            return ''
+
+        # Skip remainder comments already added to a node in this line to avoid every node
+        # in the same line having it (which is not conceptually wrong, but not DRY)
+        if node.lineno in self._sameline_added_noops:
+            return ''
+
+        # Module nodes have the remaining comments but since we put their first line as "1"
+        # any comment on the first line would wrongly show as sameline comment for the module
+        if node.__class__.__name__ == 'Module':
             return ''
 
         tokens = self.all_lines[node.lineno - 1]
@@ -212,6 +235,7 @@ class NoopExtractor(object):
         self.current_line = i
         return trailing, noop_first_lineno, noop_last_lineno
 
+
 def node_dict(node, newdict, ast_type=None):
     """
     Shortcut that adds ast_type (if not specified),
@@ -227,6 +251,7 @@ def node_dict(node, newdict, ast_type=None):
         newdict["col_offset"] = node.col_offset
 
     return newdict
+
 
 class DictExportVisitor(object):
     ast_type_field = "ast_type"
@@ -270,7 +295,6 @@ class DictExportVisitor(object):
                 })
             return nooplines
 
-
         # Add all the noop (whitespace and comments) lines between the
         # last node and this one
         noops_previous, startline, endline = self.sync.previous_nooplines(node)
@@ -303,12 +327,10 @@ class DictExportVisitor(object):
                     "lines": _create_nooplines_list(startline, noops_remainder)
                 }
 
-
     def parse(self):
         node = ast.parse(self.codestr, mode='exec')
         res = self.visit(node, root=True)
         return res
-
 
     def visit(self, node, root=False):
         node_type = node.__class__.__name__
@@ -418,7 +440,6 @@ class DictExportVisitor(object):
                           "col_offset": node.col_offset} for i in node.names]
         return node_dict(node, {"names": names_as_nodes}, ast_type="Nonlocal")
 
-
     def visit_NameConstant(self, node):
         if hasattr(node, 'value'):
             repr_val = repr(node.value)
@@ -430,31 +451,24 @@ class DictExportVisitor(object):
 
     def visit_Num(self, node):
         if isinstance(node.n, int):
-            retDict = {
-                    "NumType": "int",
-                    "LiteralValue": node.n
-                    }
+            ret_dict = { "NumType": "int", "LiteralValue": node.n }
         elif isinstance(node.n, float):
-            retDict = {
-                    "NumType": "float",
-                    "LiteralValue": node.n
-                    }
+            ret_dict = { "NumType": "float", "LiteralValue": node.n }
         elif isinstance(node.n, complex):
-            retDict = {
-                    "NumType": "complex",
-                    "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
-                    }
+            ret_dict = {
+                        "NumType": "complex",
+                        "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
+                       }
 
-        return node_dict(node, retDict, ast_type="NumLiteral")
+        return node_dict(node, ret_dict, ast_type="NumLiteral")
 
 
 if __name__ == '__main__':
     import sys
 
-    f = sys.argv[1]
-
-    with open(f) as codefile:
+    with open(sys.argv[1]) as codefile:
         content = codefile.read()
+
     # pprint(export_dict(content))
     print(export_json(content, pretty_print=True)[0])
     # export_graphviz(content)
