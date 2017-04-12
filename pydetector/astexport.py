@@ -313,6 +313,7 @@ class DictExportVisitor(object):
                     'lineno': curline,
                     'col_offset': 1,
                 })
+                curline += 1
             return nooplines
 
         # Add all the noop (whitespace and comments) lines between the
@@ -494,7 +495,7 @@ if __name__ == '__main__':
     with open(sys.argv[1]) as codefile:
         content = codefile.read()
 
-    # content = "#firstcomment\npass #trailing comment\n#previous\npass\n#lastcomment"
+    # content = "#firstcomment\n#secondcomment\nppass #trailing comment\n#middle\n#secondmiddle\npass\n#beforelast\n#lastcomment"
     # print(content)
 
     # pprint(export_dict(content))
