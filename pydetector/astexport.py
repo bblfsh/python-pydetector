@@ -89,9 +89,20 @@ def export_graphviz(codestr):
         print(dot.source, file=dotfile)
 
 
-TOKEN_VALUE = 1
+TOKEN_TYPE     = 0
+TOKEN_VALUE    = 1
+TOKEN_STARTLOC = 2
+TOKEN_ENDLOC   = 3
 TOKEN_RAWVALUE = 4
+
+ROW = 0
+COL = 1
+
 NOOP_TOKENS_LINE = {'COMMENT', 'INDENT', 'NL', 'NEWLINE'}
+
+
+def _token_name(token):
+    return token_module.tok_name[token[TOKEN_TYPE]]
 
 
 class NoopExtractor(object):
@@ -121,13 +132,13 @@ class NoopExtractor(object):
         lines = []
         nl_token = (token_module.NEWLINE, '\n', (0, 0), (0, 0), '\n')
 
-        ltname = token_module.tok_name
+        tname = _token_name
         for i, linetokens in enumerate(self.all_lines):
-            if len(linetokens) == 1 and ltname[linetokens[0][0]] == 'NL':
+            if len(linetokens) == 1 and tname(linetokens[0]) == 'NL':
                 lines.append(nl_token)
             else:
                 for token in linetokens:
-                    if ltname[token[0]] == 'COMMENT' and \
+                    if tname(token) == 'COMMENT' and \
                             token[TOKEN_RAWVALUE].lstrip().startswith('#'):
                         lines.append(token)
                         break
@@ -152,12 +163,14 @@ class NoopExtractor(object):
         for i in range(0, len(lines) + 1):
             result.append([])
 
-        ltname = token_module.tok_name
+        tname = _token_name
         for token in tokens:
-            tokentype = ltname[token[0]]
-            srow, scol = token[2]
-            erow, ecol = token[3]
-            line = erow - 1 if tokentype == 'STRING' else srow - 1
+            # Save noops in the line of the starting row except for strings where
+            # we save it in the last line (because they can be multiline)
+            if tname(token) == 'STRING':
+                line = token[TOKEN_ENDLOC][ROW] - 1
+            else:
+                line = token[TOKEN_STARTLOC][ROW] - 1
             result[line].append(token)
         assert len(lines) + 1 == len(result), len(result)
         return result
@@ -178,8 +191,8 @@ class NoopExtractor(object):
                     # take only the first line of the noops as the start and the last
                     # one (overwriteen every iteration)
                     if not noop_first_lineno:
-                        noop_first_lineno = self.current_line
-                    noop_last_lineno = self.current_line
+                        noop_first_lineno = self.current_line + 1
+                    noop_last_lineno = self.current_line + 1
                 self.current_line += 1
         return previous, noop_first_lineno, noop_last_lineno
 
@@ -205,24 +218,30 @@ class NoopExtractor(object):
 
         tokens = self.all_lines[node.lineno - 1]
         trailing = []
-        ltname = token_module.tok_name
 
+        tname = _token_name
         for token in tokens:
-            if ltname[token[0]] not in NOOP_TOKENS_LINE:
+            if tname(token) not in NOOP_TOKENS_LINE:
                 # restart
                 trailing = []
             else:
-                trailing.append(token[TOKEN_VALUE])
-
+                trailing.append({
+                    'rowstart' : token[TOKEN_STARTLOC][ROW],
+                    'colstart' : token[TOKEN_STARTLOC][COL],
+                    'rowend'   : token[TOKEN_ENDLOC][ROW],
+                    'colend'   : token[TOKEN_ENDLOC][COL],
+                    'value'    : token[TOKEN_VALUE],
+                    })
         self._sameline_added_noops.add(node.lineno)
-        return ''.join(trailing[:-1])
+        nonewline_trailing = trailing[:-1] if trailing[-1]['value'] == '\n' else trailing
+        return nonewline_trailing
 
     def remainder_noops(self):
         """return any remaining ignored lines."""
         trailing = []
         noop_last_lineno = None
         i = self.current_line
-        noop_first_lineno = self.current_line
+        noop_first_lineno = self.current_line + 1
 
         while i < len(self.astmissing_lines):
             token = self.astmissing_lines[i]
@@ -230,8 +249,8 @@ class NoopExtractor(object):
                 s = token[TOKEN_RAWVALUE]
                 trailing.append(s)
 
-            noop_last_lineno = i
             i += 1
+            noop_last_lineno = i
         self.current_line = i
         return trailing, noop_first_lineno, noop_last_lineno
 
@@ -292,6 +311,7 @@ class DictExportVisitor(object):
                     'ast_type': 'NoopLine',
                     'noop_line': noopline,
                     'lineno': curline,
+                    'col_offset': 1,
                 })
             return nooplines
 
@@ -302,6 +322,7 @@ class DictExportVisitor(object):
             visit_dict['noops_previous'] = {
                 "ast_type": "PreviousNoops",
                 "lineno": startline,
+                "col_offset": 1,
                 "end_lineno": endline,
                 "lines": _create_nooplines_list(startline, noops_previous)
             }
@@ -309,11 +330,14 @@ class DictExportVisitor(object):
         # Other noops at the end of its significative line except the implicit
         # finishing newline
         noops_sameline = self.sync.remainder_noops_sameline(node)
+        joined_sameline = ''.join([x['value'] for x in noops_sameline])
         if noops_sameline:
             visit_dict['noops_sameline'] = {
                 "ast_type": "SameLineNoops",
                 "lineno": node.lineno if hasattr(node, "lineno") else 0,
-                "noop_line": noops_sameline,
+                "col_offset": noops_sameline[0]["colstart"],
+                "col_end": noops_sameline[-1]["colend"],
+                "noop_line": joined_sameline
             }
 
         # Finally, if this is the root node, add all noops after the last op node
@@ -323,6 +347,7 @@ class DictExportVisitor(object):
                 visit_dict['noops_remainder'] = {
                     "ast_type": "RemainderNoops",
                     "lineno": startline,
+                    "col_offset": 1,
                     "end_lineno": endline,
                     "lines": _create_nooplines_list(startline, noops_remainder)
                 }
@@ -468,6 +493,9 @@ if __name__ == '__main__':
 
     with open(sys.argv[1]) as codefile:
         content = codefile.read()
+
+    # content = "#firstcomment\npass #trailing comment\n#previous\npass\n#lastcomment"
+    # print(content)
 
     # pprint(export_dict(content))
     print(export_json(content, pretty_print=True)[0])
