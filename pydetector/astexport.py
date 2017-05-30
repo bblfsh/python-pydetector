@@ -232,6 +232,9 @@ class NoopExtractor(object):
                     'colend'   : token[TOKEN_ENDLOC][COL],
                     'value'    : token[TOKEN_VALUE],
                     })
+        if not trailing:
+            return ''
+
         self._sameline_added_noops.add(node.lineno)
         nonewline_trailing = trailing[:-1] if trailing[-1]['value'] == '\n' else trailing
         return nonewline_trailing
@@ -498,6 +501,7 @@ if __name__ == '__main__':
     # content = "#firstcomment\n#secondcomment\nppass #trailing comment\n#middle\n#secondmiddle\npass\n#beforelast\n#lastcomment"
     # print(content)
 
+    # from pprint import pprint
     # pprint(export_dict(content))
     print(export_json(content, pretty_print=True)[0])
     # export_graphviz(content)
