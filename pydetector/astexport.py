@@ -503,5 +503,5 @@ if __name__ == '__main__':
 
     # from pprint import pprint
     # pprint(export_dict(content))
-    print(export_json(content, pretty_print=True)[0])
-    # export_graphviz(content)
+    # print(export_json(content, pretty_print=True)[0])
+    export_graphviz(content)

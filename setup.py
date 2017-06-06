@@ -19,7 +19,7 @@ setup(
 
     description = description,
     long_description = long_descr,
-    license = "MIT",
+    license = "Apache",
     url = "https://github.com/juanjux/python-pydetector",
     download_url = "https://github.com/juanjux/python-pydetector/archive/%s.tar.gz" % version,
     author = "Juanjo Alvarez",
@@ -38,7 +38,7 @@ setup(
         "Intended Audience :: Developers",
         "Topic :: Software Development :: Compilers",
         "Topic :: Software Development :: Disassemblers",
-        "License :: OSI Approved :: MIT License",
+        "License :: OSI Approved :: Apache License",
         "Operating System :: OS Independent",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.5"
