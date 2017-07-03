@@ -15,6 +15,7 @@ QUOTE_SUBREGEX = re.compile(
 )
 COMMENT_SUBREGEX = re.compile(r"#.*$", re.MULTILINE)
 
+
 def remove_str_comments(code):
     """
     Remove all the comments in the code (from the # to EOL). Returns
@@ -81,9 +82,11 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
             'version': 0,
             'matches': [],
             'py2_score': 0,
-            'py3_score': 0
+            'py3_score': 0,
+            'py2_ast_errors': [],
+            'py3_ast_errors': [],
         }
-        retdict = returndict[filename] # alias
+        retdict = returndict[filename]  # alias
 
         # helper for lazy bastards
         def apply_score(py2_score, py3_score):
@@ -116,7 +119,7 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
         if ast_checks:
             # Test the AST. This doesnt give points: either both pass, both fails
             # or one is correct and the other dont in which case we shortcircuit the return
-            astversion, py2astroot, py3astroot = check_ast(
+            astversion, py2astroot, py3astroot, py2_err, py3_err = check_ast(
                         input_code, try_other_on_sucess=not stop_on_ok_ast,
                         verbosity=verbosity
             )
@@ -127,6 +130,10 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
                 'py3ast': {'PY3AST': py3astroot} if py3astroot else None,
                 'matches': [('PY%dASTOK' % astversion, ())]
             })
+            if py2_err:
+                retdict['py2_ast_errors'].append(py2_err)
+            if py3_err:
+                retdict['py3_ast_errors'].append(py3_err)
 
             # One parsed and the other didnt, no need to continue checking
             if astversion in (2, 3):
@@ -162,9 +169,10 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
 
     return returndict
 
+
 if __name__ == '__main__':
     from pprint import pprint
+    import sys
     with open('astexport.py') as f:
         code = f.read()
-    # code = 'wtf lol'
     pprint(detect(codestr=code, stop_on_ok_ast=False))
