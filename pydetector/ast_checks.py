@@ -2,7 +2,7 @@ import os
 import ast
 import sys
 import subprocess
-from traceback import print_exc
+from traceback import format_exc
 sys.path.insert(0, os.path.abspath(os.pardir))
 from pydetector.astexport import export_dict  # noqa: E402
 
@@ -44,6 +44,8 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
 
     current_ok = other_ok = False
     current_ast = other_ast = None
+    py2_error = py3_error = current_error = other_error = ""
+
     pyexec_other = py2_exec if PYMAJOR_OTHER == 2 else py3_exec
 
     try:
@@ -51,11 +53,10 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
         current_ok = True
     except:
         # current_ok remains false
+        current_error = format_exc()
         if verbosity > 1:
-            print('>>>> ASTCHECK: exception while parsing AST with Python%d:'
-                  % PYMAJOR_CURRENT)
-            print_exc()
-            print('<<<< exception output end')
+            print('>>>> ASTCHECK: exception while parsing AST with Python%d:\n%s\n<<<< exception output end'
+                  % (PYMAJOR_CURRENT, current_error))
 
     if verbosity:
         print('AST extractable with version %d?: %s' % (PYMAJOR_CURRENT, str(current_ok)))
@@ -78,28 +79,31 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
                     out = out.decode('utf-8')
                 other_ast = ast.literal_eval(out)
                 other_ok = True
-            elif verbosity > 1:
-                print('>>>> ASTCHECK: error while parsing AST with Python%d:'
-                      % PYMAJOR_OTHER)
-                print(err)
-                print('<<<< error output end')
+            else:
+                other_error = err
+                if verbosity > 1:
+                    print('>>>> ASTCHECK: error while parsing AST with Python%d:\n%s\n<<<< error output end'
+                          % (PYMAJOR_OTHER, err))
         except:
             other_ok = False
+            other_error = format_exc()
             if verbosity > 1:
-                print('>>>> ASTCHECK: exception while parsing AST with Python%d:'
-                      % PYMAJOR_OTHER)
-                print_exc()
-                print('<<<< exception output end')
+                print('>>>> ASTCHECK: exception while parsing AST with Python%d:\n%s\n<<<< exception output end'
+                      % (PYMAJOR_OTHER, other_error))
 
     if verbosity:
         print('AST extractable with version %d?: %s' % (PYMAJOR_OTHER, str(other_ok)))
 
     if PYMAJOR_CURRENT == 2:
-        py2_ast = current_ast
-        py3_ast = other_ast
+        py2_ast   = current_ast
+        py2_error = current_error
+        py3_ast   = other_ast
+        py3_error = other_error
     else:
-        py3_ast = current_ast
-        py2_ast = other_ast
+        py3_ast   = current_ast
+        py3_error = current_error
+        py2_ast   = other_ast
+        py2_error = other_error
 
     version = 0
     if current_ok and not other_ok:
@@ -109,4 +113,4 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
     elif current_ok and other_ok:
         version = 6
 
-    return version, py2_ast, py3_ast
+    return version, py2_ast, py3_ast, py2_error, py3_error
