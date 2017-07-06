@@ -373,8 +373,7 @@ class DictExportVisitor(object):
 
         if node_type == 'Module':
             # add line and col since Python doesnt adds them
-            node.__dict__['lineno'] = 1
-            node.__dict__['col_offset'] = 1
+            node.__dict__['lineno'] = 0
 
         # the ctx property always has a "Load"/"Store"/etc nodes that
         # can be perfectly converted to a string value since they don't
@@ -389,6 +388,9 @@ class DictExportVisitor(object):
         if 'col_offset' in visit_result:
             # Python AST gives a 0 based column, I prefer a 1-based one
             visit_result['col_offset'] += 1
+
+        # TODO: remove this when the tokenizer fixes nodes without or with wrong positions
+        visit_result['col_offset'] = max(visit_result['col_offset'], 1)
 
         return visit_result
 
@@ -443,7 +445,8 @@ class DictExportVisitor(object):
         return str(node)
 
     def visit_Str(self, node):
-        return node_dict(node, {"LiteralValue": node.s}, self._current_parent, ast_type="StringLiteral")
+        return node_dict(node, {"LiteralValue": node.s},
+                         self._current_parent, ast_type="StringLiteral")
 
     def visit_Bytes(self, node):
         try:
@@ -454,7 +457,8 @@ class DictExportVisitor(object):
             s = encode(node.s, 'base64').decode().strip()
             encoding = 'base64'
 
-        return node_dict(node, {"LiteralValue": s, "encoding": encoding}, self._current_parent, ast_type="ByteLiteral")
+        return node_dict(node, {"LiteralValue": s, "encoding": encoding},
+                         self._current_parent, ast_type="ByteLiteral")
 
     def visit_NoneType(self, node):
         return 'NoneLiteral'
@@ -469,7 +473,8 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        return node_dict(node, {"names": names_as_nodes}, self._current_parent, ast_type="Global")
+        return node_dict(node, {"names": names_as_nodes}, self._current_parent,
+                         ast_type="Global")
 
     def visit_Nonlocal(self, node):
         # ditto
@@ -477,15 +482,18 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        return node_dict(node, {"names": names_as_nodes}, self._current_parent, ast_type="Nonlocal")
+        return node_dict(node, {"names": names_as_nodes}, self._current_parent,
+                         ast_type="Nonlocal")
 
     def visit_NameConstant(self, node):
         if hasattr(node, 'value'):
             repr_val = repr(node.value)
             if repr_val in ('True', 'False'):
-                return node_dict(node, {"LiteralValue": node.value}, self._current_parent, ast_type="BoolLiteral")
+                return node_dict(node, {"LiteralValue": node.value}, self._current_parent,
+                                 ast_type="BoolLiteral")
             elif repr_val == 'None':
-                return node_dict(node, {"LiteralValue": node.value}, self._current_parent, ast_type="NoneLiteral")
+                return node_dict(node, {"LiteralValue": node.value}, self._current_parent,
+                                 ast_type="NoneLiteral")
         return str(node)
 
     def visit_Num(self, node):
