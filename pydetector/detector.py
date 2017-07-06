@@ -103,7 +103,7 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
         else:
             # this have problems if the file is not encoding in utf8 input_code = sys.stdin.read()
             # From most to  less common, this should cover 99.9% of the encodings used
-            for encoding in ('utf_8', 'iso8859_15', 'iso8859_15', 'gb2313',
+            for encoding in ('utf_8', 'iso8859_15', 'iso8859_1', 'gb2313',
                     'cp1251', 'cp1252', 'cp1250', 'shift-jis', 'gbk', 'cp1256',
                     'iso8859-2', 'euc_jp', 'big5', 'cp874', 'euc_kr', 'iso8859_7'
                     'cp1255'):
