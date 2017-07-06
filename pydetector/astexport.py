@@ -373,7 +373,8 @@ class DictExportVisitor(object):
 
         if node_type == 'Module':
             # add line and col since Python doesnt adds them
-            node.__dict__['lineno'] = 0
+            node.__dict__['lineno'] = 1
+            node.__dict__['col_offset'] = 0
 
         # the ctx property always has a "Load"/"Store"/etc nodes that
         # can be perfectly converted to a string value since they don't
