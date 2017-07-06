@@ -258,7 +258,7 @@ class NoopExtractor(object):
         return trailing, noop_first_lineno, noop_last_lineno
 
 
-def node_dict(node, newdict, ast_type=None):
+def node_dict(node, newdict, parent, ast_type=None):
     """
     Shortcut that adds ast_type (if not specified),
     lineno and col_offset to the node-derived dictionary
@@ -269,8 +269,15 @@ def node_dict(node, newdict, ast_type=None):
     newdict["ast_type"] = ast_type
     if hasattr(node, "lineno"):
         newdict["lineno"] = node.lineno
+    elif parent and hasattr(parent, "lineno"):
+        newdict["lineno"] = parent.lineno
+
     if hasattr(node, "col_offset"):
         newdict["col_offset"] = node.col_offset
+    elif parent and hasattr(parent, "col_offset"):
+        newdict["col_offset"] = parent.col_offset
+    else:
+        newdict["col_offset"] = 0
 
     return newdict
 
@@ -367,7 +374,7 @@ class DictExportVisitor(object):
         if node_type == 'Module':
             # add line and col since Python doesnt adds them
             node.__dict__['lineno'] = 1
-            node.__dict__['col_offset'] = 0
+            node.__dict__['col_offset'] = 1
 
         # the ctx property always has a "Load"/"Store"/etc nodes that
         # can be perfectly converted to a string value since they don't
@@ -387,9 +394,11 @@ class DictExportVisitor(object):
 
     def visit_other(self, node):
         node_type = node.__class__.__name__
-        nodedict = node_dict(node, {}, ast_type = node_type)
+        nodedict = node_dict(node, {}, self._current_parent, ast_type = node_type)
 
         # Visit fields
+        self._current_parent = node
+
         for field in node._fields:
             meth = getattr(self, "visit_" + node_type, self.visit_other_field)
             nodedict[field] = meth(getattr(node, field))
@@ -420,6 +429,7 @@ class DictExportVisitor(object):
         if isinstance(node, ast.AST):
             return self.visit(node)
         elif isinstance(node, list) or isinstance(node, tuple):
+            self._current_parent = node
             return [self.visit(x) for x in node]
         else:
             # string attribute
@@ -433,7 +443,7 @@ class DictExportVisitor(object):
         return str(node)
 
     def visit_Str(self, node):
-        return node_dict(node, {"LiteralValue": node.s}, ast_type="StringLiteral")
+        return node_dict(node, {"LiteralValue": node.s}, self._current_parent, ast_type="StringLiteral")
 
     def visit_Bytes(self, node):
         try:
@@ -444,7 +454,7 @@ class DictExportVisitor(object):
             s = encode(node.s, 'base64').decode().strip()
             encoding = 'base64'
 
-        return node_dict(node, {"LiteralValue": s, "encoding": encoding}, ast_type="ByteLiteral")
+        return node_dict(node, {"LiteralValue": s, "encoding": encoding}, self._current_parent, ast_type="ByteLiteral")
 
     def visit_NoneType(self, node):
         return 'NoneLiteral'
@@ -459,7 +469,7 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        return node_dict(node, {"names": names_as_nodes}, ast_type="Global")
+        return node_dict(node, {"names": names_as_nodes}, self._current_parent, ast_type="Global")
 
     def visit_Nonlocal(self, node):
         # ditto
@@ -467,15 +477,15 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        return node_dict(node, {"names": names_as_nodes}, ast_type="Nonlocal")
+        return node_dict(node, {"names": names_as_nodes}, self._current_parent, ast_type="Nonlocal")
 
     def visit_NameConstant(self, node):
         if hasattr(node, 'value'):
             repr_val = repr(node.value)
             if repr_val in ('True', 'False'):
-                return node_dict(node, {"LiteralValue": node.value}, ast_type="BoolLiteral")
+                return node_dict(node, {"LiteralValue": node.value}, self._current_parent, ast_type="BoolLiteral")
             elif repr_val == 'None':
-                return node_dict(node, {"LiteralValue": node.value}, ast_type="NoneLiteral")
+                return node_dict(node, {"LiteralValue": node.value}, self._current_parent, ast_type="NoneLiteral")
         return str(node)
 
     def visit_Num(self, node):
@@ -489,7 +499,7 @@ class DictExportVisitor(object):
                         "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
                        }
 
-        return node_dict(node, ret_dict, ast_type="NumLiteral")
+        return node_dict(node, ret_dict, self._current_parent, ast_type="NumLiteral")
 
 
 if __name__ == '__main__':
@@ -501,7 +511,7 @@ if __name__ == '__main__':
     # content = "#firstcomment\n#secondcomment\nppass #trailing comment\n#middle\n#secondmiddle\npass\n#beforelast\n#lastcomment"
     # print(content)
 
-    # from pprint import pprint
-    # pprint(export_dict(content))
+    from pprint import pprint
+    pprint(export_dict(content))
     # print(export_json(content, pretty_print=True)[0])
-    export_graphviz(content)
+    # export_graphviz(content)
