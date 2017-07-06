@@ -277,7 +277,7 @@ def node_dict(node, newdict, parent, ast_type=None):
     elif parent and hasattr(parent, "col_offset"):
         newdict["col_offset"] = parent.col_offset
     else:
-        newdict["col_offset"] = 0
+        newdict["col_offset"] = 1
 
     return newdict
 
