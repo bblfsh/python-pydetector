@@ -280,10 +280,15 @@ class DictExportVisitor(object):
         """
         self.codestr = codestr
         self.sync = tsync_class(codestr)
-        # this is used to store the parent node of the current one; currently is only
-        # used to inherit the lineno and col_offset of the parent for "arguments" and
-        # "Operator" types
-        self._current_parent = None
+
+        # This is used to store the parent node of the current one; currently is only
+        # used to inherit the lineno and col_offset of the parent for "arguments" and other grouping
+        # nodes that the Python AST doesn't add location info.
+        self._lastlocation_parent = None
+
+    def _update_lastloc_parent(self, node):
+        if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
+            self._lastlocation_parent = node
 
     def _node_dict(self, node, newdict, ast_type=None):
         """
@@ -293,7 +298,7 @@ class DictExportVisitor(object):
         if ast_type is None:
             ast_type = node.__class__.__name__
 
-        parent = self._current_parent
+        parent = self._lastlocation_parent
 
         newdict["ast_type"] = ast_type
         if hasattr(node, "lineno"):
@@ -401,8 +406,7 @@ class DictExportVisitor(object):
         nodedict = self._node_dict(node, {}, ast_type = node_type)
 
         # Visit fields
-        self._current_parent = node
-
+        self._update_lastloc_parent(node)
         for field in node._fields:
             meth = getattr(self, "visit_" + node_type, self.visit_other_field)
             nodedict[field] = meth(getattr(node, field))
@@ -430,10 +434,10 @@ class DictExportVisitor(object):
         return nodedict
 
     def visit_other_field(self, node):
+
         if isinstance(node, ast.AST):
             return self.visit(node)
         elif isinstance(node, list) or isinstance(node, tuple):
-            self._current_parent = node
             return [self.visit(x) for x in node]
         else:
             # string attribute
@@ -469,7 +473,6 @@ class DictExportVisitor(object):
         # in a "names" array of strings. That breaks the structure of everything
         # else in the AST (dictionaries, properties or list of objects) so we
         # convert those names to Name objects
-
         names_as_nodes = [{"ast_type": "Name",
                           "id": i,
                           "lineno": node.lineno,
