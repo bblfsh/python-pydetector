@@ -281,14 +281,10 @@ class DictExportVisitor(object):
         self.codestr = codestr
         self.sync = tsync_class(codestr)
 
-        # This is used to store the parent node of the current one; currently is only
+        # This is used as a stack to store the parent node of the current one; currently is only
         # used to inherit the lineno and col_offset of the parent for "arguments" and other grouping
         # nodes that the Python AST doesn't add location info.
-        self._lastlocation_parent = None
-
-    def _update_lastloc_parent(self, node):
-        if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
-            self._lastlocation_parent = node
+        self._lastlocation_parent = []
 
     def _node_dict(self, node, newdict, ast_type=None):
         """
@@ -298,7 +294,10 @@ class DictExportVisitor(object):
         if ast_type is None:
             ast_type = node.__class__.__name__
 
-        parent = self._lastlocation_parent
+        if self._lastlocation_parent:
+            parent = self._lastlocation_parent[-1]
+        else:
+            parent = None
 
         newdict["ast_type"] = ast_type
         if hasattr(node, "lineno"):
@@ -405,36 +404,41 @@ class DictExportVisitor(object):
         node_type = node.__class__.__name__
         nodedict = self._node_dict(node, {}, ast_type = node_type)
 
-        # Visit fields
-        self._update_lastloc_parent(node)
-        for field in node._fields:
-            meth = getattr(self, "visit_" + node_type, self.visit_other_field)
-            nodedict[field] = meth(getattr(node, field))
+        if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
+            self._lastlocation_parent.append(node)
 
-            # these must inherit their position from the parent
-            # FIXME: move to a method
-            if field in ('args', 'op', 'ops', 'alias', 'keywords'):
-                if isinstance(nodedict[field], dict):
-                    toprocess = [nodedict[field]]
-                elif isinstance(nodedict[field], list):
-                    toprocess = nodedict[field]
-                else:
-                    continue
+        try:
+            # Visit fields
+            # self._update_lastloc_parent(node)
+            for field in node._fields:
+                meth = getattr(self, "visit_" + node_type, self.visit_other_field)
+                nodedict[field] = meth(getattr(node, field))
 
-                for proc in toprocess:
-                    if 'lineno' not in proc and hasattr(node, 'lineno'):
-                        proc['lineno'] = node.lineno
-                    # doesnt make sense to inherit col_offset since it would be different
+                # these must inherit their position from the parent
+                # FIXME: move to a method
+                if field in ('args', 'op', 'ops', 'alias', 'keywords'):
+                    if isinstance(nodedict[field], dict):
+                        toprocess = [nodedict[field]]
+                    elif isinstance(nodedict[field], list):
+                        toprocess = nodedict[field]
+                    else:
+                        continue
 
-        # Visit attributes
-        for attr in node._attributes:
-            meth = getattr(self, "visit_" + node_type + "_" + attr, self.visit_other_field)
-            nodedict[attr] = meth(getattr(node, attr))
+                    for proc in toprocess:
+                        if 'lineno' not in proc and hasattr(node, 'lineno'):
+                            proc['lineno'] = node.lineno
+                        # doesnt make sense to inherit col_offset since it would be different
+
+            # Visit attributes
+            for attr in node._attributes:
+                meth = getattr(self, "visit_" + node_type + "_" + attr, self.visit_other_field)
+                nodedict[attr] = meth(getattr(node, attr))
+        finally:
+            self._lastlocation_parent.pop()
 
         return nodedict
 
     def visit_other_field(self, node):
-
         if isinstance(node, ast.AST):
             return self.visit(node)
         elif isinstance(node, list) or isinstance(node, tuple):
