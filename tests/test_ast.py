@@ -10,7 +10,6 @@ PY3ERR   = 4
 
 
 class Test10Ast(unittest.TestCase):
-    # XXX check errors here in res[3] and res[4]
     def test_py2_ast(self):
         code = "print 'hello old world'"
         res = check_ast(code, try_other_on_sucess=True)
@@ -49,6 +48,67 @@ class Test10Ast(unittest.TestCase):
         self.assertEqual(res[PY3AST], None)
         self.assertNotEqual(len(res[PY3ERR]), 0)
         self.assertNotEqual(len(res[PY2ERR]), 0)
+
+
+class Test20Positions(unittest.TestCase):
+    def test_positions_attribute(self):
+        code = "import sys\nsys.stdout.write('foo')\nprint('py2', file=sys.stderr)"
+        res = check_ast(code, try_other_on_sucess=False)
+        self.assertEqual(res[PYVERIDX], 3)
+        self.assertEqual(len(res[PY3ERR]), 0)
+        ast = res[PY3AST]
+        self.assertIsInstance(ast, dict)
+
+        self.assertEqual(ast["body"][1]['value']['args'][0]['col_offset'], 18)
+        self.assertEqual(ast["body"][1]['value']['args'][0]['lineno'], 2)
+
+        self.assertEqual(ast["body"][1]['value']['func']['col_offset'], 12)
+        self.assertEqual(ast["body"][1]['value']['func']['lineno'], 2)
+
+        self.assertEqual(ast["body"][1]['value']['func']['value']['col_offset'], 5)
+        self.assertEqual(ast["body"][1]['value']['func']['value']['lineno'], 2)
+
+        self.assertEqual(ast["body"][1]['value']['func']['value']['value']['col_offset'], 1)
+        self.assertEqual(ast["body"][1]['value']['func']['value']['value']['lineno'], 2)
+
+    def test_positions_args(self):
+        code = "func(aaa, bbb)"
+        res = check_ast(code, try_other_on_sucess=True)
+        self.assertEqual(res[PYVERIDX], 6)
+        self.assertEqual(len(res[PY3ERR]), 0)
+        ast = res[PY3AST]
+
+        self.assertEqual(ast["body"][0]["value"]["args"][0]["col_offset"], 6)
+        self.assertEqual(ast["body"][0]["value"]["args"][0]["lineno"], 1)
+
+        self.assertEqual(ast["body"][0]["value"]["args"][1]["col_offset"], 11)
+        self.assertEqual(ast["body"][0]["value"]["args"][1]["lineno"], 1)
+
+    def test_positions_fstring(self):
+        code = "def func(): pass\nvar = f'Im a fstring {func()} string end'"
+        res = check_ast(code, try_other_on_sucess=True)
+        self.assertEqual(res[PYVERIDX], 3)
+        ast = res[PY3AST]
+
+        # f"
+        self.assertEqual(ast["body"][1]["value"]["col_offset"], 7)
+        self.assertEqual(ast["body"][1]["value"]["lineno"], 2)
+
+        # "Im a fstring "
+        self.assertEqual(ast["body"][1]["value"]["values"][0]["col_offset"], 9)
+        self.assertEqual(ast["body"][1]["value"]["values"][0]["lineno"], 2)
+
+        # FormattedValue node (virtual, should be the same as the child below
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["col_offset"], 23)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["lineno"], 2)
+
+        # func() insde the braces
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 23)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["lineno"], 2)
+
+        # " string end"
+        self.assertEqual(ast["body"][1]["value"]["values"][2]["col_offset"], 30)
+        self.assertEqual(ast["body"][1]["value"]["values"][2]["lineno"], 2)
 
 
 if __name__ == '__main__':

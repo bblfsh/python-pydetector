@@ -2,17 +2,16 @@
 Export an improved version of the Python AST for the given codestr
 as a Python Dictionary or JSON object
 """
+
 from __future__ import print_function
 
+__all__ = ["export_dict", "export_json", "DictExportVisitor"]
+
 import ast
-import tokenize
 import token as token_module
+import tokenize
 from codecs import encode
 from six import StringIO
-# from pprint import pprint
-
-# TODO: add an option to not change the node names of NameConstant, Num and Str
-
 
 def export_dict(codestr):
     """ Returns the AST as a Python dictionary """
@@ -28,94 +27,189 @@ def export_json(codestr, pretty_print=False):
     return json_, dict_
 
 
-NAMECOUNTER = 0
-
-
-def export_graphviz(codestr):
-    """
-    WARNING: Experimental, only compatible with Python 3 and unfinished
-    """
-    # TODO: use fillcolor for different ast_types
-    # TODO: use shape for giving different shapes to different nodes: http://www.graphviz.org/content/node-shapes#polygon
-    parent_nodekeys = {'body', 'names', 'targets', 'value', 'func', 'args', 'keywords',
-                       'keys', 'left', 'right'}
-    from graphviz import Graph
-
-    # These nodes will show their childs as hanging from their parent
-    def generate(dot, obj, parent=None, reparent=False):
-        global NAMECOUNTER
-
-        NAMECOUNTER += 1
-        nodename = str(NAMECOUNTER)
-
-        def get_name(node):
-            subname = ''
-            if isinstance(node, dict):
-                ast = node.get('ast_type', '')
-                subname = node.get('name', '')
-                id = node.get('id', '')
-                arg = node.get('arg', '')
-                separator = ': ' if ast and (subname or id or arg) else ''
-                name = '%s%s%s%s%s' % (ast, separator, subname, id, arg)
-            else:
-                name = str(type(node))
-            return name, subname
-
-        name, origname = get_name(obj)
-        if reparent or type(obj) in (list, tuple):
-            nodename = parent
-        else:
-            dot.node(nodename, label=name)
-            if parent:
-                dot.edge(parent, nodename)
-
-        if isinstance(obj, dict):
-            for childkey in parent_nodekeys:
-                if childkey in obj:
-                    reparent = childkey == 'names'
-                    generate(dot, obj[childkey], nodename, reparent)
-
-        elif isinstance(obj, list) or isinstance(obj, tuple):
-            for value in obj:
-                generate(dot, value, nodename)
-
-    dict_ = export_dict(codestr),
-    dot = Graph(comment="Python AST", format='pdf',
-                graph_attr={'ranksep': '2.5'
-                            })
-    generate(dot, dict_, 'RootNode')
-
-    with open('ast.dot', 'w') as dotfile:
-        print(dot.source, file=dotfile)
-
-
 TOKEN_TYPE     = 0
 TOKEN_VALUE    = 1
 TOKEN_STARTLOC = 2
 TOKEN_ENDLOC   = 3
 TOKEN_RAWVALUE = 4
 
-ROW = 0
-COL = 1
+TOKENROW = 0
+TOKENCOL = 1
 
 NOOP_TOKENS_LINE = {'COMMENT', 'INDENT', 'NL', 'NEWLINE'}
 
 
-def _token_name(token):
-    return token_module.tok_name[token[TOKEN_TYPE]]
+def _token_name(t):
+    return token_module.tok_name[t[TOKEN_TYPE]]
+
+
+def _create_tokenized_lines(codestr, tokens):
+    lines = codestr.splitlines() if codestr else []
+    result = []
+    for i in range(0, len(lines) + 1):
+        result.append([])
+
+    tname = _token_name  # function alias
+    for token in tokens:
+        # Save noops in the line of the starting row except for strings where
+        # we save it in the last line (because they can be multiline)
+        if tname(token) == 'STRING':
+            line = token[TOKEN_ENDLOC][TOKENROW] - 1
+        else:
+            line = token[TOKEN_STARTLOC][TOKENROW] - 1
+        result[line].append(token)
+    assert len(lines) + 1 == len(result), len(result)
+    return result
+
+
+class TokenNotFoundException(Exception):
+    pass
+
+
+class LocationFixer(object):
+    """
+    For every line, get the exact position of every token. This will be used by the
+    visitor to fix the position of some nodes that the Python's AST doesn't give or give
+    in a questionable way (sys.stdout.write -> gives the same column for the three).
+    """
+
+    def __init__(self, codestr, token_lines):
+        self._current_line = None
+
+        # consume_lines will initially hold the same list of tokens per line
+        # as all_lines, but they'll be removed as they're found by the visitor (so
+        # we still can infer real positions for several tokens with the same name
+        # on the same line)
+        self._lines = {idx: val for idx, val in enumerate(token_lines)}
+
+    def _pop_token(self, lineno, token_value):
+        from ast import literal_eval
+
+        tokensline = self._lines[lineno - 1]
+
+        # Pop the first token with the same name
+        for t in tokensline:
+            linetok_value = t[TOKEN_VALUE]
+
+            if _token_name(t) != 'STRING':
+                line_value = linetok_value
+            else:
+                if linetok_value[0] == 'f' and linetok_value[1] in ('"', "'"):
+                    # fstring: token identify as STRING but they parse into the AST as a
+                    # collection of nodes so the token_value is  different. To find the
+                    # real token position we'll search  inside the fstring token value.
+                    tok_subpos = linetok_value.find(token_value)
+                    if tok_subpos != -1:
+                        real_col = t[TOKEN_STARTLOC][TOKENCOL] + tok_subpos
+
+                        # We don't remove the fstring token from the line in this case; other
+                        # nodes could match different parts of it
+                        return (t[TOKEN_TYPE], t[TOKEN_VALUE], (t[TOKEN_STARTLOC][0], real_col),
+                                t[TOKEN_ENDLOC], t[TOKEN_RAWVALUE])
+
+                    raise TokenNotFoundException("Could not find token '{}' inside f-string '{}'"
+                            .format(token_value, linetok_value))
+                else:
+                    # normal string; they include the single or double quotes so we liteval
+                    line_value = literal_eval(linetok_value)
+
+            if line_value == token_value:
+                tokensline.remove(t)
+                return t
+
+        raise TokenNotFoundException("Token named '{}' not found in line {}"
+                .format(token_value, lineno))
+
+    def _fix_virtualnode_col(self, nodedict):
+        """
+        These "virtual parent" nodes doesnt have tokens but we could get the type from the
+        first children
+        """
+        node_type = nodedict['ast_type']
+
+        if node_type == "Call":
+            nodedict["col_offset"] = nodedict["func"]["col_offset"]
+            return True
+        elif node_type == "arguments" and len(nodedict["args"]):
+            nodedict["col_offset"] = nodedict["args"][0]["col_offset"]
+            return True
+        elif node_type == "FormattedValue":
+            nodedict["col_offset"] = nodedict["value"]["col_offset"] - 1
+            return True
+
+        return False
+
+    def fix_embbeded_pos(self, nodedict, add):
+        """
+        For nodes that wrongly start from 1 (line subcode inside f-strings)
+        this fixes the lineno field adding the argument (which should be
+        the parent node correct lineno)
+        """
+
+        nodedict["lineno"] += add - 1
+
+        for key in nodedict:
+            if isinstance(nodedict[key], dict):
+                self.fix_embbeded_pos(nodedict[key], add)
+
+        self.fix_node_col(nodedict, add = 1)
+        return nodedict
+
+    def fix_node_col(self, nodedict, add = 0):
+        """
+        Check the column position, updating the column if needed (this changes the
+        nodedict argument). Some Nodes have questionable column positions in the Python
+        given AST (e.g. all items in sys.stdout.write have column 1). This fixes if the
+        linenumber is right, using the more exact position given by the tokenizer. When a
+        node is checked, it's removed from it's line list so the next token with the same
+        name the next time the visitor finds another eponymous one.
+        """
+
+        if self._fix_virtualnode_col(nodedict):
+            return
+
+        node_type = nodedict['ast_type']
+        node_line = nodedict.get('lineno')
+        if node_line is None:
+            return
+
+        # We take these node properties as token name if they exists
+        # (same used in the Bblfsh Python driver parser.go):
+        node_keyset = set(nodedict.keys())
+        token_keys = list(node_keyset.intersection(_TOKEN_KEYS))
+
+        if token_keys:
+            node_token = token_keys[0]
+        else:
+            synth_keys = list(node_keyset.intersection(_SYNTHETIC_TOKENS))
+            if synth_keys:
+                node_token = synth_keys[0]
+            else:
+                return  # token not found
+        try:
+            # Pop the fist token with the same name in the same line.
+            token = self._pop_token(node_line, node_token)
+        except TokenNotFoundException:
+            # Only happens with multiline string and the original
+            # position in that case is fine (uses the last line in that case)
+            return
+
+        node_column = nodedict.get('col_offset')
+        token_startcolumn = token[TOKEN_STARTLOC][TOKENCOL]
+
+        if node_column is None or node_column != token_startcolumn:
+            nodedict["col_offset"] = token_startcolumn + add
 
 
 class NoopExtractor(object):
     """
     Tokenize the source code and extract lines with tokens that Python's
-    AST generator ignore like blanks and comments
+    AST generator ignore like blanks and comments.
     """
 
-    def __init__(self, codestr):
-        tokens = tokenize.generate_tokens(StringIO(codestr).readline)
-
-        self.current_line = None
-        self.all_lines = self._create_tokenized_lines(tokens, codestr)
+    def __init__(self, codestr, token_lines):
+        self._current_line = None
+        self._all_lines = tuple(token_lines)
         self.astmissing_lines = self._create_astmissing_lines()
 
         # This set is used to avoid adding the "same line-remainder noops" nodes as a child
@@ -132,48 +226,26 @@ class NoopExtractor(object):
         lines = []
         nl_token = (token_module.NEWLINE, '\n', (0, 0), (0, 0), '\n')
 
-        tname = _token_name
-        for i, linetokens in enumerate(self.all_lines):
-            if len(linetokens) == 1 and tname(linetokens[0]) == 'NL':
+        for i, linetokens in enumerate(self._all_lines):
+            if len(linetokens) == 1 and _token_name(linetokens[0]) == 'NL':
                 lines.append(nl_token)
             else:
                 for token in linetokens:
-                    if tname(token) == 'COMMENT' and \
+                    if _token_name(token) == 'COMMENT' and \
                             token[TOKEN_RAWVALUE].lstrip().startswith('#'):
                         lines.append(token)
                         break
                 else:
                     lines.append(None)
-        assert len(lines) == len(self.all_lines)
+        assert len(lines) == len(self._all_lines)
 
         for i, linetokens in enumerate(lines):
             if linetokens:
-                self.current_line = i
+                self._current_line = i
                 break
         else:
-            self.current_line = len(lines)
+            self._current_line = len(lines)
         return lines
-
-    def _create_tokenized_lines(self, tokens, codestr):
-        """
-        Create a list of tokenized lines
-        """
-        lines = codestr.splitlines() if codestr else []
-        result = []
-        for i in range(0, len(lines) + 1):
-            result.append([])
-
-        tname = _token_name
-        for token in tokens:
-            # Save noops in the line of the starting row except for strings where
-            # we save it in the last line (because they can be multiline)
-            if tname(token) == 'STRING':
-                line = token[TOKEN_ENDLOC][ROW] - 1
-            else:
-                line = token[TOKEN_STARTLOC][ROW] - 1
-            result[line].append(token)
-        assert len(lines) + 1 == len(result), len(result)
-        return result
 
     def previous_nooplines(self, node):
         """Return a list of the preceding comment and blank lines"""
@@ -182,8 +254,8 @@ class NoopExtractor(object):
         noop_last_lineno = None
 
         if hasattr(node, 'lineno'):
-            while self.current_line < node.lineno:
-                token = self.astmissing_lines[self.current_line]
+            while self._current_line < node.lineno:
+                token = self.astmissing_lines[self._current_line]
                 if token:
                     s = token[TOKEN_RAWVALUE].rstrip() + '\n'
                     previous.append(s)
@@ -191,12 +263,12 @@ class NoopExtractor(object):
                     # take only the first line of the noops as the start and the last
                     # one (overwriteen every iteration)
                     if not noop_first_lineno:
-                        noop_first_lineno = self.current_line + 1
-                    noop_last_lineno = self.current_line + 1
-                self.current_line += 1
+                        noop_first_lineno = self._current_line + 1
+                    noop_last_lineno = self._current_line + 1
+                self._current_line += 1
         return previous, noop_first_lineno, noop_last_lineno
 
-    def remainder_noops_sameline(self, node):
+    def sameline_remainder_noops(self, node):
         """
         Return a string containing the trailing (until EOL) noops for the
         node, if any. The ending newline is implicit and thus not returned
@@ -216,7 +288,7 @@ class NoopExtractor(object):
         if node.__class__.__name__ == 'Module':
             return ''
 
-        tokens = self.all_lines[node.lineno - 1]
+        tokens = self._all_lines[node.lineno - 1]
         trailing = []
 
         tname = _token_name
@@ -226,11 +298,11 @@ class NoopExtractor(object):
                 trailing = []
             else:
                 trailing.append({
-                    'rowstart' : token[TOKEN_STARTLOC][ROW],
-                    'colstart' : token[TOKEN_STARTLOC][COL],
-                    'rowend'   : token[TOKEN_ENDLOC][ROW],
-                    'colend'   : token[TOKEN_ENDLOC][COL],
-                    'value'    : token[TOKEN_VALUE],
+                    'rowstart' : token[TOKEN_STARTLOC][TOKENROW],
+                    'colstart' : token[TOKEN_STARTLOC][TOKENCOL],
+                    'rowend'   : token[TOKEN_ENDLOC][TOKENROW],
+                    'colend'   : token[TOKEN_ENDLOC][TOKENCOL],
+                    'value'    : token[TOKEN_VALUE]
                     })
         if not trailing:
             return ''
@@ -243,8 +315,8 @@ class NoopExtractor(object):
         """return any remaining ignored lines."""
         trailing = []
         noop_last_lineno = None
-        i = self.current_line
-        noop_first_lineno = self.current_line + 1
+        i = self._current_line
+        noop_first_lineno = self._current_line + 1
 
         while i < len(self.astmissing_lines):
             token = self.astmissing_lines[i]
@@ -254,14 +326,26 @@ class NoopExtractor(object):
 
             i += 1
             noop_last_lineno = i
-        self.current_line = i
+        self._current_line = i
         return trailing, noop_first_lineno, noop_last_lineno
+
+
+_TOKEN_KEYS = set(
+    ("module", "name", "id", "attr", "arg", "LiteralValue")
+)
+
+_SYNTHETIC_TOKENS = set(
+        ("Print", "Ellipsis", "Add", "Sub", "Mult", "Div", "FloorDiv", "Mod",
+        "Pow", "AugAssign", "BitAnd", "BitOr", "BitXor", "LShift", "RShift",
+        "Eq", "NotEq", "Not", "Lt", "LtE", "Gt", "GtE", "Is", "IsNot", "In",
+        "NotIn", "UAdd", "USub", "Invert")
+)
 
 
 class DictExportVisitor(object):
     ast_type_field = "ast_type"
 
-    def __init__(self, codestr, ast_parser=ast.parse, tsync_class=NoopExtractor):
+    def __init__(self, codestr, ast_parser=ast.parse):
         """
         Initialize the Token Syncer composited object, parse the source code
         and start visiting the node tree to add comments and other modifications
@@ -275,22 +359,31 @@ class DictExportVisitor(object):
             tsync_class (class, optional): the class to use to sinchronize the tokenizer with
             the AST visits. This is needed to extract aditional info like comments or whitespace
             that most AST parsers doesn't include in the tree. This class need to provide the public
-            methods "previous_nooplines",  "remainder_noops_sameline" and "rmainder_noops".
+            methods "previous_nooplines",  "sameline_remainder_noops" and "rmainder_noops".
             By default astexport.NoopExtractor will be used.
         """
-        self.codestr = codestr
-        self.sync = tsync_class(codestr)
+        token_lines = _create_tokenized_lines(
+                codestr,
+                tokenize.generate_tokens(StringIO(codestr).readline)
+        )
+        self.noops_sync = NoopExtractor(codestr, token_lines)
+        self.pos_sync   = LocationFixer(codestr, token_lines)
+        self.codestr    = codestr
 
         # This is used to store the parent node of the current one; currently is only
         # used to inherit the lineno and col_offset of the parent for "arguments" and other grouping
         # nodes that the Python AST doesn't add location info.
         self._lastlocation_parent = None
 
+        # Some nodes (f-strings currently) must update the columns after the've done some
+        # previous line number fixing, so this state member enable or disable the checking/fixing
+        self._checkpos_enabled = True
+
     def _update_lastloc_parent(self, node):
         if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
             self._lastlocation_parent = node
 
-    def _node_dict(self, node, newdict, ast_type=None):
+    def _nodedict(self, node, newdict, ast_type=None):
         """
         Shortcut that adds ast_type (if not specified),
         lineno and col_offset to the node-derived dictionary
@@ -315,7 +408,7 @@ class DictExportVisitor(object):
 
         return newdict
 
-    def _addNoopFields(self, node, visit_dict, root):
+    def _add_noops(self, node, visit_dict, root):
         if not isinstance(visit_dict, dict):
             return visit_dict
 
@@ -324,17 +417,17 @@ class DictExportVisitor(object):
             curline = startline
             for noopline in noops_previous:
                 nooplines.append({
-                    'ast_type': 'NoopLine',
-                    'noop_line': noopline,
-                    'lineno': curline,
-                    'col_offset': 1,
+                    "ast_type": "NoopLine",
+                    "noop_line": noopline,
+                    "lineno": curline,
+                    "col_offset": 1,
                 })
                 curline += 1
             return nooplines
 
         # Add all the noop (whitespace and comments) lines between the
         # last node and this one
-        noops_previous, startline, endline = self.sync.previous_nooplines(node)
+        noops_previous, startline, endline = self.noops_sync.previous_nooplines(node)
         if noops_previous:
             visit_dict['noops_previous'] = {
                 "ast_type": "PreviousNoops",
@@ -346,7 +439,7 @@ class DictExportVisitor(object):
 
         # Other noops at the end of its significative line except the implicit
         # finishing newline
-        noops_sameline = self.sync.remainder_noops_sameline(node)
+        noops_sameline = self.noops_sync.sameline_remainder_noops(node)
         joined_sameline = ''.join([x['value'] for x in noops_sameline])
         if noops_sameline:
             visit_dict['noops_sameline'] = {
@@ -359,7 +452,7 @@ class DictExportVisitor(object):
 
         # Finally, if this is the root node, add all noops after the last op node
         if root:
-            noops_remainder, startline, endline = self.sync.remainder_noops()
+            noops_remainder, startline, endline = self.noops_sync.remainder_noops()
             if noops_remainder:
                 visit_dict['noops_remainder'] = {
                     "ast_type": "RemainderNoops",
@@ -367,7 +460,7 @@ class DictExportVisitor(object):
                     "col_offset": 1,
                     "end_lineno": endline,
                     "lines": _create_nooplines_list(startline, noops_remainder)
-                }
+                    }
 
     def parse(self):
         node = ast.parse(self.codestr, mode='exec')
@@ -379,7 +472,7 @@ class DictExportVisitor(object):
 
         if node_type == 'Module':
             # add line and col since Python doesnt adds them
-            node.__dict__['lineno'] = 1
+            node.__dict__['lineno']     = 1
             node.__dict__['col_offset'] = 0
 
         # the ctx property always has a "Load"/"Store"/etc nodes that
@@ -390,20 +483,22 @@ class DictExportVisitor(object):
 
         meth = getattr(self, "visit_" + node_type, self.visit_other)
         visit_result = meth(node)
-        self._addNoopFields(node, visit_result, root)
+
+        if self._checkpos_enabled:
+            self.pos_sync.fix_node_col(visit_result)
+
+        self._add_noops(node, visit_result, root)
 
         if 'col_offset' in visit_result:
-            # Python AST gives a 0 based column, I prefer a 1-based one
+            # Python AST gives a 0 based column, bblfsh uses 1-based
             visit_result['col_offset'] += 1
 
-        # TODO: remove this when the tokenizer fixes nodes without or with wrong positions
         visit_result['col_offset'] = max(visit_result['col_offset'], 1)
-
         return visit_result
 
     def visit_other(self, node):
         node_type = node.__class__.__name__
-        nodedict = self._node_dict(node, {}, ast_type = node_type)
+        nodedict = self._nodedict(node, {}, ast_type = node_type)
 
         # Visit fields
         self._update_lastloc_parent(node)
@@ -434,7 +529,6 @@ class DictExportVisitor(object):
         return nodedict
 
     def visit_other_field(self, node):
-
         if isinstance(node, ast.AST):
             return self.visit(node)
         elif isinstance(node, list) or isinstance(node, tuple):
@@ -451,7 +545,7 @@ class DictExportVisitor(object):
         return str(node)
 
     def visit_Str(self, node):
-        return self._node_dict(node, {"LiteralValue": node.s}, ast_type="StringLiteral")
+        return self._nodedict(node, {"LiteralValue": node.s}, ast_type="StringLiteral")
 
     def visit_Bytes(self, node):
         try:
@@ -462,7 +556,7 @@ class DictExportVisitor(object):
             s = encode(node.s, 'base64').decode().strip()
             encoding = 'base64'
 
-        return self._node_dict(node, {"LiteralValue": s, "encoding": encoding},
+        return self._nodedict(node, {"LiteralValue": s, "encoding": encoding},
                          ast_type="ByteLiteral")
 
     def visit_NoneType(self, node):
@@ -477,7 +571,7 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        return self._node_dict(node, {"names": names_as_nodes}, ast_type="Global")
+        return self._nodedict(node, {"names": names_as_nodes}, ast_type="Global")
 
     def visit_Nonlocal(self, node):
         # ditto
@@ -485,16 +579,16 @@ class DictExportVisitor(object):
                           "id": i,
                           "lineno": node.lineno,
                           "col_offset": node.col_offset} for i in node.names]
-        return self._node_dict(node, {"names": names_as_nodes}, ast_type="Nonlocal")
+        return self._nodedict(node, {"names": names_as_nodes}, ast_type="Nonlocal")
 
     def visit_NameConstant(self, node):
         if hasattr(node, 'value'):
             repr_val = repr(node.value)
             if repr_val in ('True', 'False'):
-                return self._node_dict(node, {"LiteralValue": node.value},
+                return self._nodedict(node, {"LiteralValue": node.value},
                         ast_type="BoolLiteral")
             elif repr_val == 'None':
-                return self._node_dict(node, {"LiteralValue": node.value},
+                return self._nodedict(node, {"LiteralValue": node.value},
                                  ast_type="NoneLiteral")
         return str(node)
 
@@ -509,19 +603,40 @@ class DictExportVisitor(object):
                         "LiteralValue": {"real": node.n.real, "imaginary": node.n.imag},
                        }
 
-        return self._node_dict(node, ret_dict, ast_type="NumLiteral")
+        return self._nodedict(node, ret_dict, ast_type="NumLiteral")
+
+    def visit_FormattedValue(self, node):
+        # Subcode inside the FormattedValue.value nodes have their lineno starting from 1,
+        # so we'll fix that storing the FormattedValue lineno and adding it to the subcode
+        # nodes lineno
+        self._checkpos_enabled = False  # it wouldn't work without correct lineno
+        try:
+            value_dict = self.pos_sync.fix_embbeded_pos(self.visit(node.value),
+                                                        node.lineno)
+            nodedict = {
+                    "conversion": node.conversion,
+                    "format_spec": node.format_spec,
+                    "value": value_dict,
+            }
+            retdict = self._nodedict(node, nodedict, ast_type="FormattedValue")
+        finally:
+            self._checkpos_enabled = True
+
+        return retdict
 
 
 if __name__ == '__main__':
-    import sys
+    # for manual tests
 
-    with open(sys.argv[1]) as codefile:
-        content = codefile.read()
+    # import sys
+    # with open(sys.argv[1]) as codefile:
+        # content = codefile.read()
 
     # content = "#firstcomment\n#secondcomment\nppass #trailing comment\n#middle\n#secondmiddle\npass\n#beforelast\n#lastcomment"
-    # print(content)
+    # content = "import sys\nsys.write.stdout.write(\"pok\")\n"
+    content = "import sys\ndef somefunc(): pass\nvar = f'some fstring {somefunc()} after'"
 
+    # print(content)
     from pprint import pprint
     pprint(export_dict(content))
     # print(export_json(content, pretty_print=True)[0])
-    # export_graphviz(content)
