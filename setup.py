@@ -14,7 +14,7 @@ with open("pydetector/version.py") as ver_file:
 
 version = main_ns['__version__']
 setup(
-    name = "pydetector",
+    name = "pydetector-bblfsh",
     version = version,
 
     description = description,
