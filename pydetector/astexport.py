@@ -98,7 +98,7 @@ class LocationFixer(object):
                     # fstring: token identify as STRING but they parse into the AST as a
                     # collection of nodes so the token_value is  different. To find the
                     # real token position we'll search  inside the fstring token value.
-                    tok_subpos = linetok_value.find(token_value)
+                    tok_subpos = linetok_value.find(str(token_value))
                     if tok_subpos != -1:
                         real_col = t[TOKEN_STARTLOC][TOKENCOL] + tok_subpos
 
@@ -180,7 +180,7 @@ class LocationFixer(object):
         token_keys = list(node_keyset.intersection(_TOKEN_KEYS))
 
         if token_keys:
-            node_token = token_keys[0]
+            node_token = nodedict[token_keys[0]]
         else:
             synth_keys = list(node_keyset.intersection(_SYNTHETIC_TOKENS))
             if synth_keys:
@@ -607,9 +607,10 @@ class DictExportVisitor(object):
         try:
             value_dict = self.pos_sync.fix_embbeded_pos(self.visit(node.value),
                                                         node.lineno)
+            fspec = self.visit(node.format_spec) if node.format_spec else None
             nodedict = {
                     "conversion": node.conversion,
-                    "format_spec": node.format_spec,
+                    "format_spec": fspec,
                     "value": value_dict,
             }
             retdict = self._nodedict(node, nodedict, ast_type="FormattedValue")
