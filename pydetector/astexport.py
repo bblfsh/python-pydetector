@@ -8,10 +8,13 @@ from __future__ import print_function
 __all__ = ["export_dict", "export_json", "DictExportVisitor"]
 
 import ast
+import sys
 import token as token_module
 import tokenize
+from ast import literal_eval
 from codecs import encode
 from six import StringIO
+
 
 def export_dict(codestr):
     """ Returns the AST as a Python dictionary """
@@ -27,10 +30,10 @@ def export_json(codestr, pretty_print=False):
     return json_, dict_
 
 
-TOKEN_TYPE     = 0
-TOKEN_VALUE    = 1
+TOKEN_TYPE = 0
+TOKEN_VALUE = 1
 TOKEN_STARTLOC = 2
-TOKEN_ENDLOC   = 3
+TOKEN_ENDLOC = 3
 TOKEN_RAWVALUE = 4
 
 TOKENROW = 0
@@ -49,11 +52,10 @@ def _create_tokenized_lines(codestr, tokens):
     for i in range(0, len(lines) + 1):
         result.append([])
 
-    tname = _token_name  # function alias
     for token in tokens:
         # Save noops in the line of the starting row except for strings where
         # we save it in the last line (because they can be multiline)
-        if tname(token) == 'STRING':
+        if _token_name(token) == 'STRING':
             line = token[TOKEN_ENDLOC][TOKENROW] - 1
         else:
             line = token[TOKEN_STARTLOC][TOKENROW] - 1
@@ -76,15 +78,13 @@ class LocationFixer(object):
     def __init__(self, codestr, token_lines):
         self._current_line = None
 
-        # consume_lines will initially hold the same list of tokens per line
-        # as all_lines, but they'll be removed as they're found by the visitor (so
-        # we still can infer real positions for several tokens with the same name
-        # on the same line)
+        # _lines will initially hold the same list of tokens per line as received (in a
+        # dict so speed lookups), but the tokens inside will be removed as they're found
+        # by the visitor (so we still can infer real positions for several tokens with the
+        # same name on the same line)
         self._lines = {idx: val for idx, val in enumerate(token_lines)}
 
     def _pop_token(self, lineno, token_value):
-        from ast import literal_eval
-
         tokensline = self._lines[lineno - 1]
 
         # Pop the first token with the same name
@@ -122,8 +122,8 @@ class LocationFixer(object):
 
     def _fix_virtualnode_col(self, nodedict):
         """
-        These "virtual parent" nodes doesnt have tokens but we could get the type from the
-        first children
+        These "virtual parent" nodes don't have tokens but we could get the location from
+        the first child.
         """
         node_type = nodedict['ast_type']
 
@@ -160,15 +160,16 @@ class LocationFixer(object):
         Check the column position, updating the column if needed (this changes the
         nodedict argument). Some Nodes have questionable column positions in the Python
         given AST (e.g. all items in sys.stdout.write have column 1). This fixes if the
-        linenumber is right, using the more exact position given by the tokenizer. When a
-        node is checked, it's removed from it's line list so the next token with the same
-        name the next time the visitor finds another eponymous one.
+        linenumber is right, using the more exact position given by the tokenizer.
+
+        When a node is checked, it's removed from its line list, so the next token with
+        the same name will not consume that token again (except for fstrings that are
+        a special case of a token mapping to several possible AST nodes).
         """
 
         if self._fix_virtualnode_col(nodedict):
             return
 
-        node_type = nodedict['ast_type']
         node_line = nodedict.get('lineno')
         if node_line is None:
             return
@@ -203,8 +204,8 @@ class LocationFixer(object):
 
 class NoopExtractor(object):
     """
-    Tokenize the source code and extract lines with tokens that Python's
-    AST generator ignore like blanks and comments.
+    Extract lines with tokens from the tokenized source that Python's AST generator ignore
+    like blanks and comments.
     """
 
     def __init__(self, codestr, token_lines):
@@ -291,18 +292,17 @@ class NoopExtractor(object):
         tokens = self._all_lines[node.lineno - 1]
         trailing = []
 
-        tname = _token_name
         for token in tokens:
-            if tname(token) not in NOOP_TOKENS_LINE:
+            if _token_name(token) not in NOOP_TOKENS_LINE:
                 # restart
                 trailing = []
             else:
                 trailing.append({
-                    'rowstart' : token[TOKEN_STARTLOC][TOKENROW],
-                    'colstart' : token[TOKEN_STARTLOC][TOKENCOL],
-                    'rowend'   : token[TOKEN_ENDLOC][TOKENROW],
-                    'colend'   : token[TOKEN_ENDLOC][TOKENCOL],
-                    'value'    : token[TOKEN_VALUE]
+                    'rowstart': token[TOKEN_STARTLOC][TOKENROW],
+                    'colstart': token[TOKEN_STARTLOC][TOKENCOL],
+                    'rowend': token[TOKEN_ENDLOC][TOKENROW],
+                    'colend': token[TOKEN_ENDLOC][TOKENCOL],
+                    'value': token[TOKEN_VALUE]
                     })
         if not trailing:
             return ''
@@ -355,12 +355,6 @@ class DictExportVisitor(object):
 
             ast_parser (function, optional): the AST parser function to use. It needs to take
             a string with the code as parameter. By default it will be ast.parse from stdlib.
-
-            tsync_class (class, optional): the class to use to sinchronize the tokenizer with
-            the AST visits. This is needed to extract aditional info like comments or whitespace
-            that most AST parsers doesn't include in the tree. This class need to provide the public
-            methods "previous_nooplines",  "sameline_remainder_noops" and "rmainder_noops".
-            By default astexport.NoopExtractor will be used.
         """
         token_lines = _create_tokenized_lines(
                 codestr,
@@ -472,7 +466,7 @@ class DictExportVisitor(object):
 
         if node_type == 'Module':
             # add line and col since Python doesnt adds them
-            node.__dict__['lineno']     = 1
+            node.__dict__['lineno'] = 1
             node.__dict__['col_offset'] = 0
 
         # the ctx property always has a "Load"/"Store"/etc nodes that
@@ -628,15 +622,11 @@ class DictExportVisitor(object):
 if __name__ == '__main__':
     # for manual tests
 
-    # import sys
-    # with open(sys.argv[1]) as codefile:
-        # content = codefile.read()
+    if len(sys.argv) > 1:
+        with open(sys.argv[1]) as codefile:
+            content = codefile.read()
+    else:
+        content = "import sys\ndef somefunc(): pass\nvar = f'some fstring {somefunc()} after'"
 
-    # content = "#firstcomment\n#secondcomment\nppass #trailing comment\n#middle\n#secondmiddle\npass\n#beforelast\n#lastcomment"
-    # content = "import sys\nsys.write.stdout.write(\"pok\")\n"
-    content = "import sys\ndef somefunc(): pass\nvar = f'some fstring {somefunc()} after'"
-
-    # print(content)
     from pprint import pprint
     pprint(export_dict(content))
-    # print(export_json(content, pretty_print=True)[0])
