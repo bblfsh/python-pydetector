@@ -1,0 +1,23 @@
+language: python
+sudo: required
+
+# PyDetector need both Python versions installed to work
+before_install:
+    - sudo apt-get update 
+    - sudo apt-get install -y python2.7
+cache:
+  directories:
+    - $HOME/.cache/pip
+python:
+  - "3.6"
+install:
+  - pip2 install --upgrade pip
+  - pip3 install --upgrade pip
+  - pip3 install --upgrade .
+  - pip3 install --upgrade .
+  - pip2 install -r requirements.txt
+  - pip3 install -r requirements.txt
+script:
+  - python -m unittest discover tests/
+notifications:
+  email: false
