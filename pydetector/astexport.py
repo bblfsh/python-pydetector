@@ -13,6 +13,7 @@ import token as token_module
 import tokenize
 from ast import literal_eval
 from codecs import encode
+from collections import Iterable
 from six import StringIO
 
 
@@ -187,26 +188,34 @@ class LocationFixer(object):
         nodedict["end_lineno"] = token[TOKEN_ENDLOC][TOKENROW]
         nodedict["end_col_offset"] = token[TOKEN_ENDLOC][TOKENCOL]
 
-    def _extract_childpositions(self, nodedict, childpositions=[]):
+    def _max_child_endpos(self, nd, lower_pos = ()):
+        """
+        Return the end position of the farthest child node. Used to update containers
+        nodes where the tokenizer doesn't have a token or it's the token of the symbol and
+        not the contents.
+        """
 
-        def add_position(nd):
-            if isinstance(nd, list):
-                map(add_position, nd)
-            elif isinstance(nd, dict) and "end_lineno" in nd:
-                childpositions.append((nd["end_lineno"], nd["end_col_offset"]))
-                map(add_position, nd.values())
+        if isinstance(nd, list):
+            max_children = [self._max_child_endpos(i, lower_pos)
+                            for i in nd if isinstance(i, Iterable)]
+            lower_pos = max([lower_pos] + max_children)
 
-        add_position(nodedict)
-        return sorted(childpositions)
+        elif isinstance(nd, dict):
+            cur_pos = (nd["end_lineno"], nd["end_col_offset"]) if "end_lineno" in nd else ()
+            max_children = [self._max_child_endpos(i, lower_pos)
+                            for i in nd.values() if isinstance(i, Iterable)]
+            lower_pos = max([lower_pos, cur_pos] + max_children)
+
+        return lower_pos
 
     def _fix_endposition(self, nodedict):
         """
         Set the endposition to the endposition of the latest child
         """
 
-        childpositions = self._extract_childpositions(nodedict)
-        if childpositions:
-            nodedict["end_lineno"], nodedict["end_col_offset"] = childpositions[-1]
+        max_position = self._max_child_endpos(nodedict)
+        if max_position:
+            nodedict["end_lineno"], nodedict["end_col_offset"] = max_position
 
     def fix_embeded_pos(self, nodedict, add):
         """
