@@ -513,10 +513,9 @@ class DictExportVisitor(object):
                 "ast_type": "SameLineNoops",
                 "lineno": node.lineno if hasattr(node, "lineno") else 0,
                 "col_offset": noops_sameline[0]["colstart"],
-                "col_end": noops_sameline[-1]["colend"],
                 "noop_line": joined_sameline,
-                "end_lineno": endline,
-                "end_col_offset": endcol
+                "end_lineno": node.lineno,
+                "end_col_offset": noops_sameline[-1]["colend"]
             }
 
         # Finally, if this is the root node, add all noops after the last op node
