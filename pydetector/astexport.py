@@ -13,6 +13,7 @@ import token as token_module
 import tokenize
 from ast import literal_eval
 from codecs import encode
+from collections import Iterable
 from six import StringIO
 
 
@@ -113,7 +114,7 @@ class LocationFixer(object):
                     # normal string; they include the single or double quotes so we liteval
                     line_value = literal_eval(linetok_value)
 
-            if line_value == token_value:
+            if str(line_value) == str(token_value):
                 tokensline.remove(t)
                 return t
 
@@ -139,23 +140,7 @@ class LocationFixer(object):
 
         return False
 
-    def fix_embbeded_pos(self, nodedict, add):
-        """
-        For nodes that wrongly start from 1 (line subcode inside f-strings)
-        this fixes the lineno field adding the argument (which should be
-        the parent node correct lineno)
-        """
-
-        nodedict["lineno"] += add - 1
-
-        for key in nodedict:
-            if isinstance(nodedict[key], dict):
-                self.fix_embbeded_pos(nodedict[key], add)
-
-        self.fix_node_col(nodedict, add = 1)
-        return nodedict
-
-    def fix_node_col(self, nodedict, add = 0):
+    def _sync_node_col(self, nodedict, add = 0):
         """
         Check the column position, updating the column if needed (this changes the
         nodedict argument). Some Nodes have questionable column positions in the Python
@@ -182,10 +167,8 @@ class LocationFixer(object):
         if token_keys:
             node_token = nodedict[token_keys[0]]
         else:
-            synth_keys = list(node_keyset.intersection(_SYNTHETIC_TOKENS))
-            if synth_keys:
-                node_token = synth_keys[0]
-            else:
+            node_token = _SYNTHETIC_TOKENS.get(nodedict["ast_type"])
+            if not node_token:
                 return  # token not found
         try:
             # Pop the fist token with the same name in the same line.
@@ -200,6 +183,58 @@ class LocationFixer(object):
 
         if node_column is None or node_column != token_startcolumn:
             nodedict["col_offset"] = token_startcolumn + add
+
+        # For grouping nodes; this will be improved in _fix_endcol if needed
+        nodedict["end_lineno"] = token[TOKEN_ENDLOC][TOKENROW]
+        nodedict["end_col_offset"] = token[TOKEN_ENDLOC][TOKENCOL]
+
+    def _max_child_endpos(self, nd, lower_pos = ()):
+        """
+        Return the end position of the farthest child node. Used to update containers
+        nodes where the tokenizer doesn't have a token or it's the token of the symbol and
+        not the contents.
+        """
+
+        if isinstance(nd, list):
+            max_children = [self._max_child_endpos(i, lower_pos)
+                            for i in nd if isinstance(i, Iterable)]
+            lower_pos = max([lower_pos] + max_children)
+
+        elif isinstance(nd, dict):
+            cur_pos = (nd["end_lineno"], nd["end_col_offset"]) if "end_lineno" in nd else ()
+            max_children = [self._max_child_endpos(i, lower_pos)
+                            for i in nd.values() if isinstance(i, Iterable)]
+            lower_pos = max([lower_pos, cur_pos] + max_children)
+
+        return lower_pos
+
+    def _fix_endposition(self, nodedict):
+        """
+        Set the endposition to the endposition of the latest child
+        """
+
+        max_position = self._max_child_endpos(nodedict)
+        if max_position:
+            nodedict["end_lineno"], nodedict["end_col_offset"] = max_position
+
+    def fix_embeded_pos(self, nodedict, add):
+        """
+        For nodes that wrongly start from 1 (line subcode inside f-strings)
+        this fixes the lineno field adding the argument (which should be
+        the parent node correct lineno)
+        """
+        nodedict["lineno"] += add - 1
+
+        for key in nodedict:
+            if isinstance(nodedict[key], dict):
+                self.fix_embeded_pos(nodedict[key], add)
+
+        self._sync_node_col(nodedict, add = 1)
+        return nodedict
+
+    def apply_fixes(self, nodedict):
+        self._sync_node_col(nodedict)
+        self._fix_endposition(nodedict)
 
 
 class NoopExtractor(object):
@@ -251,8 +286,9 @@ class NoopExtractor(object):
     def previous_nooplines(self, node):
         """Return a list of the preceding comment and blank lines"""
         previous = []
-        noop_first_lineno = None
-        noop_last_lineno = None
+        first_lineno = None
+        lastline = None
+        lastcol = None
 
         if hasattr(node, 'lineno'):
             while self._current_line < node.lineno:
@@ -263,11 +299,12 @@ class NoopExtractor(object):
 
                     # take only the first line of the noops as the start and the last
                     # one (overwriteen every iteration)
-                    if not noop_first_lineno:
-                        noop_first_lineno = self._current_line + 1
-                    noop_last_lineno = self._current_line + 1
+                    if not first_lineno:
+                        first_lineno = self._current_line + 1
+                    lastline = self._current_line + 1
+                    lastcol = token[TOKEN_ENDLOC][TOKENCOL]
                 self._current_line += 1
-        return previous, noop_first_lineno, noop_last_lineno
+        return previous, first_lineno, lastline, lastcol
 
     def sameline_remainder_noops(self, node):
         """
@@ -314,9 +351,11 @@ class NoopExtractor(object):
     def remainder_noops(self):
         """return any remaining ignored lines."""
         trailing = []
-        noop_last_lineno = None
+        lastline = None
+        lastcol = 1
+
         i = self._current_line
-        noop_first_lineno = self._current_line + 1
+        first_lineno = self._current_line + 1
 
         while i < len(self.astmissing_lines):
             token = self.astmissing_lines[i]
@@ -325,21 +364,50 @@ class NoopExtractor(object):
                 trailing.append(s)
 
             i += 1
-            noop_last_lineno = i
+            if token:
+                lastline = i
+                lastcol = len(token)
+            else:
+                lastcol = 1
         self._current_line = i
-        return trailing, noop_first_lineno, noop_last_lineno
+        return trailing, first_lineno, lastline, lastcol
 
 
 _TOKEN_KEYS = set(
     ("module", "name", "id", "attr", "arg", "LiteralValue")
 )
 
-_SYNTHETIC_TOKENS = set(
-        ("Print", "Ellipsis", "Add", "Sub", "Mult", "Div", "FloorDiv", "Mod",
-        "Pow", "AugAssign", "BitAnd", "BitOr", "BitXor", "LShift", "RShift",
-        "Eq", "NotEq", "Not", "Lt", "LtE", "Gt", "GtE", "Is", "IsNot", "In",
-        "NotIn", "UAdd", "USub", "Invert")
-)
+_SYNTHETIC_TOKENS = {
+    "Print": "print",
+    "Ellipsis": "...",
+    "Add": "+",
+    "Sub": "-",
+    "Mult": "*",
+    "Div": "/",
+    "FloorDiv": "//",
+    "Mod": "%%",
+    "Pow": "**",
+    "AugAssign": "+=",
+    "BitAnd": "&",
+    "BitOr": "|",
+    "BitXor": "^",
+    "LShift": "<<",
+    "RShift": ">>",
+    "Eq": "==",
+    "NotEq": "!=",
+    "Not": "not",
+    "Lt": "<",
+    "LtE": "<=",
+    "Gt": ">",
+    "GtE": ">=",
+    "Is": "is",
+    "IsNot": "not is",
+    "In": "in",
+    "NotIn": "not in",
+    "UAdd": "+",
+    "USub": "-",
+    "Invert": "~"
+}
 
 
 class DictExportVisitor(object):
@@ -356,10 +424,9 @@ class DictExportVisitor(object):
             ast_parser (function, optional): the AST parser function to use. It needs to take
             a string with the code as parameter. By default it will be ast.parse from stdlib.
         """
-        token_lines = _create_tokenized_lines(
-                codestr,
-                tokenize.generate_tokens(StringIO(codestr).readline)
-        )
+        # Tokenize and create the noop extractor and the position fixer
+        self._tokens = tokenize.generate_tokens(StringIO(codestr).readline)
+        token_lines = _create_tokenized_lines(codestr, self._tokens)
         self.noops_sync = NoopExtractor(codestr, token_lines)
         self.pos_sync   = LocationFixer(codestr, token_lines)
         self.codestr    = codestr
@@ -372,6 +439,10 @@ class DictExportVisitor(object):
         # Some nodes (f-strings currently) must update the columns after the've done some
         # previous line number fixing, so this state member enable or disable the checking/fixing
         self._checkpos_enabled = True
+
+        # This will store a dict of nodes to end positions, it will be filled
+        # on parse()
+        self._node2endpos = None
 
     def _update_lastloc_parent(self, node):
         if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
@@ -421,13 +492,15 @@ class DictExportVisitor(object):
 
         # Add all the noop (whitespace and comments) lines between the
         # last node and this one
-        noops_previous, startline, endline = self.noops_sync.previous_nooplines(node)
+        noops_previous, startline, endline, endcol =\
+            self.noops_sync.previous_nooplines(node)
         if noops_previous:
             visit_dict['noops_previous'] = {
                 "ast_type": "PreviousNoops",
                 "lineno": startline,
                 "col_offset": 1,
                 "end_lineno": endline,
+                "end_col_offset": endcol,
                 "lines": _create_nooplines_list(startline, noops_previous)
             }
 
@@ -441,24 +514,28 @@ class DictExportVisitor(object):
                 "lineno": node.lineno if hasattr(node, "lineno") else 0,
                 "col_offset": noops_sameline[0]["colstart"],
                 "col_end": noops_sameline[-1]["colend"],
-                "noop_line": joined_sameline
+                "noop_line": joined_sameline,
+                "end_lineno": endline,
+                "end_col_offset": endcol
             }
 
         # Finally, if this is the root node, add all noops after the last op node
         if root:
-            noops_remainder, startline, endline = self.noops_sync.remainder_noops()
+            noops_remainder, startline, endline, endcol =\
+                    self.noops_sync.remainder_noops()
             if noops_remainder:
                 visit_dict['noops_remainder'] = {
                     "ast_type": "RemainderNoops",
                     "lineno": startline,
                     "col_offset": 1,
                     "end_lineno": endline,
+                    "end_col_offset": endcol,
                     "lines": _create_nooplines_list(startline, noops_remainder)
                     }
 
     def parse(self):
-        node = ast.parse(self.codestr, mode='exec')
-        res = self.visit(node, root=True)
+        tree = ast.parse(self.codestr, mode='exec')
+        res = self.visit(tree, root=True)
         return res
 
     def visit(self, node, root=False):
@@ -477,17 +554,16 @@ class DictExportVisitor(object):
 
         meth = getattr(self, "visit_" + node_type, self.visit_other)
         visit_result = meth(node)
+        self._add_noops(node, visit_result, root)
 
         if self._checkpos_enabled:
-            self.pos_sync.fix_node_col(visit_result)
-
-        self._add_noops(node, visit_result, root)
+            self.pos_sync.apply_fixes(visit_result)
 
         if 'col_offset' in visit_result:
             # Python AST gives a 0 based column, bblfsh uses 1-based
             visit_result['col_offset'] += 1
-
         visit_result['col_offset'] = max(visit_result['col_offset'], 1)
+
         return visit_result
 
     def visit_other(self, node):
@@ -605,8 +681,8 @@ class DictExportVisitor(object):
         # nodes lineno
         self._checkpos_enabled = False  # it wouldn't work without correct lineno
         try:
-            value_dict = self.pos_sync.fix_embbeded_pos(self.visit(node.value),
-                                                        node.lineno)
+            value_dict = self.pos_sync.fix_embeded_pos(self.visit(node.value),
+                                                       node.lineno)
             fspec = self.visit(node.format_spec) if node.format_spec else None
             nodedict = {
                     "conversion": node.conversion,
@@ -627,7 +703,14 @@ if __name__ == '__main__':
         with open(sys.argv[1]) as codefile:
             content = codefile.read()
     else:
-        content = "import sys\ndef somefunc(): pass\nvar = f'some fstring {somefunc()} after'"
+        content = \
+'''if True:
+    if False:
+        a = 6 + 7
+    else:
+        print('LAST')
+
+'''
 
     from pprint import pprint
     pprint(export_dict(content))
