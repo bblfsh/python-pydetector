@@ -500,7 +500,7 @@ class DictExportVisitor(object):
                 "lineno": startline,
                 "col_offset": 1,
                 "end_lineno": endline,
-                "end_col_offset": endcol,
+                "end_col_offset": endcol + 1,
                 "lines": _create_nooplines_list(startline, noops_previous)
             }
 
@@ -515,7 +515,7 @@ class DictExportVisitor(object):
                 "col_offset": noops_sameline[0]["colstart"],
                 "noop_line": joined_sameline,
                 "end_lineno": node.lineno,
-                "end_col_offset": noops_sameline[-1]["colend"]
+                "end_col_offset": noops_sameline[-1]["colend"] + 1
             }
 
         # Finally, if this is the root node, add all noops after the last op node
@@ -528,7 +528,7 @@ class DictExportVisitor(object):
                     "lineno": startline,
                     "col_offset": 1,
                     "end_lineno": endline,
-                    "end_col_offset": endcol,
+                    "end_col_offset": endcol + 1,
                     "lines": _create_nooplines_list(startline, noops_remainder)
                     }
 
@@ -558,10 +558,8 @@ class DictExportVisitor(object):
         if self._checkpos_enabled:
             self.pos_sync.apply_fixes(visit_result)
 
-        if 'col_offset' in visit_result:
-            # Python AST gives a 0 based column, bblfsh uses 1-based
-            visit_result['col_offset'] += 1
-        visit_result['col_offset'] = max(visit_result['col_offset'], 1)
+        # Python AST gives a 0 based column, bblfsh uses 1-based
+        visit_result['col_offset'] = visit_result.get('col_offset', 0) + 1
 
         return visit_result
 
