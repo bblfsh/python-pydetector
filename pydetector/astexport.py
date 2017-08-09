@@ -500,7 +500,7 @@ class DictExportVisitor(object):
                 "lineno": startline,
                 "col_offset": 1,
                 "end_lineno": endline,
-                "end_col_offset": endcol + 1,
+                "end_col_offset": max(endcol, 1),
                 "lines": _create_nooplines_list(startline, noops_previous)
             }
 
@@ -515,7 +515,7 @@ class DictExportVisitor(object):
                 "col_offset": noops_sameline[0]["colstart"],
                 "noop_line": joined_sameline,
                 "end_lineno": node.lineno,
-                "end_col_offset": noops_sameline[-1]["colend"] + 1
+                "end_col_offset": max(noops_sameline[-1]["colend"], 1)
             }
 
         # Finally, if this is the root node, add all noops after the last op node
@@ -528,7 +528,7 @@ class DictExportVisitor(object):
                     "lineno": startline,
                     "col_offset": 1,
                     "end_lineno": endline,
-                    "end_col_offset": endcol + 1,
+                    "end_col_offset": max(endcol, 1),
                     "lines": _create_nooplines_list(startline, noops_remainder)
                     }
 
@@ -558,8 +558,16 @@ class DictExportVisitor(object):
         if self._checkpos_enabled:
             self.pos_sync.apply_fixes(visit_result)
 
-        # Python AST gives a 0 based column, bblfsh uses 1-based
-        visit_result['col_offset'] = visit_result.get('col_offset', 0) + 1
+        if not self.codestr:
+            # empty files are the only case where 0-indexes are allowed
+            visit_result['col_offset'] = visit_result['end_col_offset'] = \
+                    visit_result['lineno'] = visit_result['end_lineno'] = 0
+        else:
+            # Python AST gives a 0 based column for the starting col, bblfsh uses 1-based
+            visit_result['col_offset'] = max(visit_result.get('col_offset', 1) + 1, 1)
+
+            if "end_col_offset" in visit_result:
+                visit_result['end_col_offset'] = max(visit_result['end_col_offset'], 1)
 
         return visit_result
 
@@ -627,7 +635,7 @@ class DictExportVisitor(object):
                          ast_type="ByteLiteral")
 
     def visit_NoneType(self, node):
-        return 'NoneLiteral'
+        return self._nodedict(node, {"LiteralValue": "None"}, ast_type="NoneLiteral")
 
     def visit_Global(self, node):
         # Python AST by default stores global and nonlocal variable names
@@ -657,7 +665,7 @@ class DictExportVisitor(object):
             elif repr_val == 'None':
                 return self._nodedict(node, {"LiteralValue": node.value},
                                  ast_type="NoneLiteral")
-        return str(node)
+        return self._nodedict(node, {}, ast_type='NameConstant')
 
     def visit_Num(self, node):
         if isinstance(node.n, int):
