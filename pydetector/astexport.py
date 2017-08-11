@@ -13,8 +13,8 @@ import token as token_module
 import tokenize
 from ast import literal_eval
 from codecs import encode
-from collections import Iterable
-from six import StringIO
+from collections import Iterable, Mapping
+from six import StringIO, string_types
 
 
 def export_dict(codestr):
@@ -29,6 +29,16 @@ def export_json(codestr, pretty_print=False):
     dict_ = {'AST': export_dict(codestr)}
     json_ = json.dumps(dict_, indent=2 if pretty_print else 0, ensure_ascii=False)
     return json_, dict_
+
+
+def map_dict_rec(i, func):
+    if isinstance(i, Mapping):
+        func(i)
+
+    if isinstance(i, Iterable) and not isinstance(i, string_types):
+        values = i.values() if isinstance(i, Mapping) else i
+        for x in values:
+            map_dict_rec(x, func)
 
 
 TOKEN_TYPE = 0
@@ -88,7 +98,7 @@ class LocationFixer(object):
     def _pop_token(self, lineno, token_value):
         tokensline = self._lines[lineno - 1]
 
-        # Pop the first token with the same name
+        # Pop the first token with the same name in the same line
         for t in tokensline:
             linetok_value = t[TOKEN_VALUE]
 
@@ -121,7 +131,7 @@ class LocationFixer(object):
         raise TokenNotFoundException("Token named '{}' not found in line {}"
                 .format(token_value, lineno))
 
-    def _fix_virtualnode_col(self, nodedict):
+    def _fix_virtualnode_pos(self, nodedict):
         """
         These "virtual parent" nodes don't have tokens but we could get the location from
         the first child.
@@ -132,15 +142,21 @@ class LocationFixer(object):
             nodedict["col_offset"] = nodedict["func"]["col_offset"]
             return True
         elif node_type == "arguments" and len(nodedict["args"]):
+            nodedict["lineno"] = nodedict["args"][0]["lineno"]
+            nodedict["end_lineno"] = nodedict["args"][-1]["end_lineno"]
+
             nodedict["col_offset"] = nodedict["args"][0]["col_offset"]
+            nodedict["end_col_offset"] = nodedict["args"][-1]["end_col_offset"]
             return True
         elif node_type == "FormattedValue":
             nodedict["col_offset"] = nodedict["value"]["col_offset"] - 1
             return True
+        elif node_type == "FunctionDef":
+            nodedict["lineno"] = nodedict["args"]["lineno"]
 
         return False
 
-    def _sync_node_col(self, nodedict, add = 0):
+    def _sync_node_pos(self, nodedict, add = 0):
         """
         Check the column position, updating the column if needed (this changes the
         nodedict argument). Some Nodes have questionable column positions in the Python
@@ -151,8 +167,7 @@ class LocationFixer(object):
         the same name will not consume that token again (except for fstrings that are
         a special case of a token mapping to several possible AST nodes).
         """
-
-        if self._fix_virtualnode_col(nodedict):
+        if self._fix_virtualnode_pos(nodedict):
             return
 
         node_line = nodedict.get('lineno')
@@ -184,7 +199,7 @@ class LocationFixer(object):
         if node_column is None or node_column != token_startcolumn:
             nodedict["col_offset"] = token_startcolumn + add
 
-        # For grouping nodes; this will be improved in _fix_endcol if needed
+        # For grouping nodes; this will be improved in _fix_endposition if needed
         nodedict["end_lineno"] = token[TOKEN_ENDLOC][TOKENROW]
         nodedict["end_col_offset"] = token[TOKEN_ENDLOC][TOKENCOL]
 
@@ -195,16 +210,23 @@ class LocationFixer(object):
         not the contents.
         """
 
+        if '__cached_endpos' in nd:
+            return nd["__cached_endpos"]
+
         if isinstance(nd, list):
             max_children = [self._max_child_endpos(i, lower_pos)
-                            for i in nd if isinstance(i, Iterable)]
+                            for i in nd if isinstance(i, Iterable) and
+                            not isinstance(i, string_types)]
             lower_pos = max([lower_pos] + max_children)
 
         elif isinstance(nd, dict):
             cur_pos = (nd["end_lineno"], nd["end_col_offset"]) if "end_lineno" in nd else ()
             max_children = [self._max_child_endpos(i, lower_pos)
-                            for i in nd.values() if isinstance(i, Iterable)]
+                            for i in nd.values() if isinstance(i, Iterable) and
+                            not isinstance(i, string_types)]
             lower_pos = max([lower_pos, cur_pos] + max_children)
+            if lower_pos:
+                nd['__cached_endpos'] = lower_pos
 
         return lower_pos
 
@@ -219,7 +241,7 @@ class LocationFixer(object):
 
     def fix_embeded_pos(self, nodedict, add):
         """
-        For nodes that wrongly start from 1 (line subcode inside f-strings)
+        For nodes that wrongly start from 1 (like subcode inside f-strings)
         this fixes the lineno field adding the argument (which should be
         the parent node correct lineno)
         """
@@ -229,11 +251,11 @@ class LocationFixer(object):
             if isinstance(nodedict[key], dict):
                 self.fix_embeded_pos(nodedict[key], add)
 
-        self._sync_node_col(nodedict, add = 1)
+        self._sync_node_pos(nodedict, add = 1)
         return nodedict
 
     def apply_fixes(self, nodedict):
-        self._sync_node_col(nodedict)
+        self._sync_node_pos(nodedict)
         self._fix_endposition(nodedict)
 
 
@@ -406,7 +428,8 @@ _SYNTHETIC_TOKENS = {
     "NotIn": "not in",
     "UAdd": "+",
     "USub": "-",
-    "Invert": "~"
+    "Invert": "~",
+    "Pass": "pass"
 }
 
 
@@ -535,6 +558,8 @@ class DictExportVisitor(object):
     def parse(self):
         tree = ast.parse(self.codestr, mode='exec')
         res = self.visit(tree, root=True)
+        # Remove the catching position key
+        map_dict_rec(res, lambda x: x.pop('__cached_endpos', None))
         return res
 
     def visit(self, node, root=False):
