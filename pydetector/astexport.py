@@ -131,32 +131,7 @@ class LocationFixer(object):
         raise TokenNotFoundException("Token named '{}' not found in line {}"
                 .format(token_value, lineno))
 
-    def _fix_virtualnode_pos(self, nodedict):
-        """
-        These "virtual parent" nodes don't have tokens but we could get the location from
-        the first child.
-        """
-        node_type = nodedict['ast_type']
-
-        if node_type == "Call":
-            nodedict["col_offset"] = nodedict["func"]["col_offset"]
-            return True
-        elif node_type == "arguments" and len(nodedict["args"]):
-            nodedict["lineno"] = nodedict["args"][0]["lineno"]
-            nodedict["end_lineno"] = nodedict["args"][-1]["end_lineno"]
-
-            nodedict["col_offset"] = nodedict["args"][0]["col_offset"]
-            nodedict["end_col_offset"] = nodedict["args"][-1]["end_col_offset"]
-            return True
-        elif node_type == "FormattedValue":
-            nodedict["col_offset"] = nodedict["value"]["col_offset"] - 1
-            return True
-        elif node_type == "FunctionDef":
-            nodedict["lineno"] = nodedict["args"]["lineno"]
-
-        return False
-
-    def _sync_node_pos(self, nodedict, add = 0):
+    def sync_node_pos(self, nodedict, add = 0):
         """
         Check the column position, updating the column if needed (this changes the
         nodedict argument). Some Nodes have questionable column positions in the Python
@@ -167,8 +142,6 @@ class LocationFixer(object):
         the same name will not consume that token again (except for fstrings that are
         a special case of a token mapping to several possible AST nodes).
         """
-        if self._fix_virtualnode_pos(nodedict):
-            return
 
         node_line = nodedict.get('lineno')
         if node_line is None:
@@ -199,45 +172,8 @@ class LocationFixer(object):
         if node_column is None or node_column != token_startcolumn:
             nodedict["col_offset"] = token_startcolumn + add
 
-        # For grouping nodes; this will be improved in _fix_endposition if needed
         nodedict["end_lineno"] = token[TOKEN_ENDLOC][TOKENROW]
         nodedict["end_col_offset"] = token[TOKEN_ENDLOC][TOKENCOL]
-
-    def _max_child_endpos(self, nd, lower_pos = ()):
-        """
-        Return the end position of the farthest child node. Used to update containers
-        nodes where the tokenizer doesn't have a token or it's the token of the symbol and
-        not the contents.
-        """
-
-        if '__cached_endpos' in nd:
-            return nd["__cached_endpos"]
-
-        if isinstance(nd, list):
-            max_children = [self._max_child_endpos(i, lower_pos)
-                            for i in nd if isinstance(i, Iterable) and
-                            not isinstance(i, string_types)]
-            lower_pos = max([lower_pos] + max_children)
-
-        elif isinstance(nd, dict):
-            cur_pos = (nd["end_lineno"], nd["end_col_offset"]) if "end_lineno" in nd else ()
-            max_children = [self._max_child_endpos(i, lower_pos)
-                            for i in nd.values() if isinstance(i, Iterable) and
-                            not isinstance(i, string_types)]
-            lower_pos = max([lower_pos, cur_pos] + max_children)
-            if lower_pos:
-                nd['__cached_endpos'] = lower_pos
-
-        return lower_pos
-
-    def _fix_endposition(self, nodedict):
-        """
-        Set the endposition to the endposition of the latest child
-        """
-
-        max_position = self._max_child_endpos(nodedict)
-        if max_position:
-            nodedict["end_lineno"], nodedict["end_col_offset"] = max_position
 
     def fix_embeded_pos(self, nodedict, add):
         """
@@ -251,12 +187,8 @@ class LocationFixer(object):
             if isinstance(nodedict[key], dict):
                 self.fix_embeded_pos(nodedict[key], add)
 
-        self._sync_node_pos(nodedict, add = 1)
+        self.sync_node_pos(nodedict, add = 1)
         return nodedict
-
-    def apply_fixes(self, nodedict):
-        self._sync_node_pos(nodedict)
-        self._fix_endposition(nodedict)
 
 
 class NoopExtractor(object):
@@ -400,36 +332,56 @@ _TOKEN_KEYS = set(
 )
 
 _SYNTHETIC_TOKENS = {
-    "Print": "print",
-    "Ellipsis": "...",
     "Add": "+",
-    "Sub": "-",
-    "Mult": "*",
-    "Div": "/",
-    "FloorDiv": "//",
-    "Mod": "%%",
-    "Pow": "**",
+    "Assert": "assert",
     "AugAssign": "+=",
     "BitAnd": "&",
     "BitOr": "|",
     "BitXor": "^",
-    "LShift": "<<",
-    "RShift": ">>",
+    "Break": "break",
+    "ClassDef": "class",
+    "Continue": "continue",
+    "Delete": "del",
+    "Div": "/",
+    "Ellipsis": "...",
+    "ExceptHandler": "except",
     "Eq": "==",
-    "NotEq": "!=",
-    "Not": "not",
-    "Lt": "<",
-    "LtE": "<=",
+    "False": "False",
+    "For": "for",
+    "FloorDiv": "//",
+    "Global": "global",
     "Gt": ">",
     "GtE": ">=",
+    "If": "if",
+    "In": "in",
+    "Invert": "~",
     "Is": "is",
     "IsNot": "not is",
-    "In": "in",
+    "Lambda": "lambda",
+    "LShift": "<<",
+    "Lt": "<",
+    "LtE": "<=",
+    "Mod": "%%",
+    "Mult": "*",
+    "None": "None",
+    "Nonlocal": "nonlocal",
+    "Not": "not",
+    "NotEq": "!=",
     "NotIn": "not in",
+    "Pass": "pass",
+    "Pow": "**",
+    "Print": "print",
+    "Raise": "raise",
+    "Return": "return",
+    "RShift": ">>",
+    "Sub": "-",
+    "True": "true",
+    "Try": "try",
     "UAdd": "+",
     "USub": "-",
-    "Invert": "~",
-    "Pass": "pass"
+    "While": "while",
+    "With": "with",
+    "Yield": "yield",
 }
 
 
@@ -454,11 +406,6 @@ class DictExportVisitor(object):
         self.pos_sync   = LocationFixer(codestr, token_lines)
         self.codestr    = codestr
 
-        # This is used to store the parent node of the current one; currently is only
-        # used to inherit the lineno and col_offset of the parent for "arguments" and other grouping
-        # nodes that the Python AST doesn't add location info.
-        self._lastlocation_parent = None
-
         # Some nodes (f-strings currently) must update the columns after the've done some
         # previous line number fixing, so this state member enable or disable the checking/fixing
         self._checkpos_enabled = True
@@ -466,10 +413,6 @@ class DictExportVisitor(object):
         # This will store a dict of nodes to end positions, it will be filled
         # on parse()
         self._node2endpos = None
-
-    def _update_lastloc_parent(self, node):
-        if hasattr(node, 'lineno') and hasattr(node, 'col_offset'):
-            self._lastlocation_parent = node
 
     def _nodedict(self, node, newdict, ast_type=None):
         """
@@ -479,20 +422,12 @@ class DictExportVisitor(object):
         if ast_type is None:
             ast_type = node.__class__.__name__
 
-        parent = self._lastlocation_parent
-
         newdict["ast_type"] = ast_type
         if hasattr(node, "lineno"):
             newdict["lineno"] = node.lineno
-        elif parent and hasattr(parent, "lineno"):
-            newdict["lineno"] = parent.lineno
 
         if hasattr(node, "col_offset"):
             newdict["col_offset"] = node.col_offset
-        elif parent and hasattr(parent, "col_offset"):
-            newdict["col_offset"] = parent.col_offset
-        else:
-            newdict["col_offset"] = 1
 
         return newdict
 
@@ -565,11 +500,6 @@ class DictExportVisitor(object):
     def visit(self, node, root=False):
         node_type = node.__class__.__name__
 
-        if node_type == 'Module':
-            # add line and col since Python doesnt adds them
-            node.__dict__['lineno'] = 1
-            node.__dict__['col_offset'] = 0
-
         # the ctx property always has a "Load"/"Store"/etc nodes that
         # can be perfectly converted to a string value since they don't
         # hold anything more than the name
@@ -581,18 +511,19 @@ class DictExportVisitor(object):
         self._add_noops(node, visit_result, root)
 
         if self._checkpos_enabled:
-            self.pos_sync.apply_fixes(visit_result)
+            self.pos_sync.sync_node_pos(visit_result)
 
         if not self.codestr:
             # empty files are the only case where 0-indexes are allowed
-            visit_result['col_offset'] = visit_result['end_col_offset'] = \
-                    visit_result['lineno'] = visit_result['end_lineno'] = 0
+            visit_result["col_offset"] = visit_result["end_col_offset"] = \
+                    visit_result["lineno"] = visit_result["end_lineno"] = 0
         else:
             # Python AST gives a 0 based column for the starting col, bblfsh uses 1-based
-            visit_result['col_offset'] = max(visit_result.get('col_offset', 1) + 1, 1)
+            if "col_offset" in visit_result:
+                visit_result["col_offset"] = max(visit_result.get("col_offset", 1) + 1, 1)
 
             if "end_col_offset" in visit_result:
-                visit_result['end_col_offset'] = max(visit_result['end_col_offset'], 1)
+                visit_result["end_col_offset"] = max(visit_result["end_col_offset"], 1)
 
         return visit_result
 
@@ -601,25 +532,9 @@ class DictExportVisitor(object):
         nodedict = self._nodedict(node, {}, ast_type = node_type)
 
         # Visit fields
-        self._update_lastloc_parent(node)
         for field in node._fields:
             meth = getattr(self, "visit_" + node_type, self.visit_other_field)
             nodedict[field] = meth(getattr(node, field))
-
-            # these must inherit their position from the parent
-            # FIXME: move to a method
-            if field in ('args', 'op', 'ops', 'alias', 'keywords'):
-                if isinstance(nodedict[field], dict):
-                    toprocess = [nodedict[field]]
-                elif isinstance(nodedict[field], list):
-                    toprocess = nodedict[field]
-                else:
-                    continue
-
-                for proc in toprocess:
-                    if 'lineno' not in proc and hasattr(node, 'lineno'):
-                        proc['lineno'] = node.lineno
-                    # doesnt make sense to inherit col_offset since it would be different
 
         # Visit attributes
         for attr in node._attributes:
