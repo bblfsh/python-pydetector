@@ -99,11 +99,11 @@ class Test20Positions(unittest.TestCase):
         self.assertEqual(ast["body"][1]["value"]["values"][0]["lineno"], 2)
 
         # FormattedValue node (virtual, should be the same as the child below
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["col_offset"], 23)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["col_offset"], 7)
         self.assertEqual(ast["body"][1]["value"]["values"][1]["lineno"], 2)
 
         # func() insde the braces
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 23)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 2)
         self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["lineno"], 2)
 
         # " string end"
