@@ -131,7 +131,7 @@ class LocationFixer(object):
         raise TokenNotFoundException("Token named '{}' not found in line {}"
                 .format(token_value, lineno))
 
-    def _sync_node_pos(self, nodedict, add = 0):
+    def sync_node_pos(self, nodedict, add = 0):
         """
         Check the column position, updating the column if needed (this changes the
         nodedict argument). Some Nodes have questionable column positions in the Python
@@ -187,11 +187,8 @@ class LocationFixer(object):
             if isinstance(nodedict[key], dict):
                 self.fix_embeded_pos(nodedict[key], add)
 
-        self._sync_node_pos(nodedict, add = 1)
+        self.sync_node_pos(nodedict, add = 1)
         return nodedict
-
-    def apply_fixes(self, nodedict):
-        self._sync_node_pos(nodedict)
 
 
 class NoopExtractor(object):
@@ -335,36 +332,56 @@ _TOKEN_KEYS = set(
 )
 
 _SYNTHETIC_TOKENS = {
-    "Print": "print",
-    "Ellipsis": "...",
     "Add": "+",
-    "Sub": "-",
-    "Mult": "*",
-    "Div": "/",
-    "FloorDiv": "//",
-    "Mod": "%%",
-    "Pow": "**",
+    "Assert": "assert",
     "AugAssign": "+=",
     "BitAnd": "&",
     "BitOr": "|",
     "BitXor": "^",
-    "LShift": "<<",
-    "RShift": ">>",
+    "Break": "break",
+    "ClassDef": "class",
+    "Continue": "continue",
+    "Delete": "del",
+    "Div": "/",
+    "Ellipsis": "...",
+    "ExceptHandler": "except",
     "Eq": "==",
-    "NotEq": "!=",
-    "Not": "not",
-    "Lt": "<",
-    "LtE": "<=",
+    "False": "False",
+    "For": "for",
+    "FloorDiv": "//",
+    "Global": "global",
     "Gt": ">",
     "GtE": ">=",
+    "If": "if",
+    "In": "in",
+    "Invert": "~",
     "Is": "is",
     "IsNot": "not is",
-    "In": "in",
+    "Lambda": "lambda",
+    "LShift": "<<",
+    "Lt": "<",
+    "LtE": "<=",
+    "Mod": "%%",
+    "Mult": "*",
+    "None": "None",
+    "Nonlocal": "nonlocal",
+    "Not": "not",
+    "NotEq": "!=",
     "NotIn": "not in",
+    "Pass": "pass",
+    "Pow": "**",
+    "Print": "print",
+    "Raise": "raise",
+    "Return": "return",
+    "RShift": ">>",
+    "Sub": "-",
+    "True": "true",
+    "Try": "try",
     "UAdd": "+",
     "USub": "-",
-    "Invert": "~",
-    "Pass": "pass"
+    "While": "while",
+    "With": "with",
+    "Yield": "yield",
 }
 
 
@@ -494,7 +511,7 @@ class DictExportVisitor(object):
         self._add_noops(node, visit_result, root)
 
         if self._checkpos_enabled:
-            self.pos_sync.apply_fixes(visit_result)
+            self.pos_sync.sync_node_pos(visit_result)
 
         if not self.codestr:
             # empty files are the only case where 0-indexes are allowed
