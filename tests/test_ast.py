@@ -1,4 +1,5 @@
 import unittest
+import _ast
 from textwrap import dedent
 from pydetector.ast_checks import check_ast
 
@@ -59,16 +60,16 @@ class Test20Positions(unittest.TestCase):
         ast = res[PY3AST]
         self.assertIsInstance(ast, dict)
 
-        self.assertEqual(ast["body"][1]['value']['args'][0]['col_offset'], 18)
+        self.assertEqual(ast["body"][1]['value']['args'][0]['col_offset'], 17)
         self.assertEqual(ast["body"][1]['value']['args'][0]['lineno'], 2)
 
-        self.assertEqual(ast["body"][1]['value']['func']['col_offset'], 12)
+        self.assertEqual(ast["body"][1]['value']['func']['col_offset'], 0)
         self.assertEqual(ast["body"][1]['value']['func']['lineno'], 2)
 
-        self.assertEqual(ast["body"][1]['value']['func']['value']['col_offset'], 5)
+        self.assertEqual(ast["body"][1]['value']['func']['value']['col_offset'], 0)
         self.assertEqual(ast["body"][1]['value']['func']['value']['lineno'], 2)
 
-        self.assertEqual(ast["body"][1]['value']['func']['value']['value']['col_offset'], 1)
+        self.assertEqual(ast["body"][1]['value']['func']['value']['value']['col_offset'], 0)
         self.assertEqual(ast["body"][1]['value']['func']['value']['value']['lineno'], 2)
 
     def test_positions_args(self):
@@ -78,10 +79,10 @@ class Test20Positions(unittest.TestCase):
         self.assertEqual(len(res[PY3ERR]), 0)
         ast = res[PY3AST]
 
-        self.assertEqual(ast["body"][0]["value"]["args"][0]["col_offset"], 6)
+        self.assertEqual(ast["body"][0]["value"]["args"][0]["col_offset"], 5)
         self.assertEqual(ast["body"][0]["value"]["args"][0]["lineno"], 1)
 
-        self.assertEqual(ast["body"][0]["value"]["args"][1]["col_offset"], 11)
+        self.assertEqual(ast["body"][0]["value"]["args"][1]["col_offset"], 10)
         self.assertEqual(ast["body"][0]["value"]["args"][1]["lineno"], 1)
 
     def test_positions_fstring(self):
@@ -91,23 +92,23 @@ class Test20Positions(unittest.TestCase):
         ast = res[PY3AST]
 
         # f"
-        self.assertEqual(ast["body"][1]["value"]["col_offset"], 7)
+        self.assertEqual(ast["body"][1]["value"]["col_offset"], 6)
         self.assertEqual(ast["body"][1]["value"]["lineno"], 2)
 
         # "Im a fstring "
-        self.assertEqual(ast["body"][1]["value"]["values"][0]["col_offset"], 9)
+        self.assertEqual(ast["body"][1]["value"]["values"][0]["col_offset"], 6)
         self.assertEqual(ast["body"][1]["value"]["values"][0]["lineno"], 2)
 
         # FormattedValue node (virtual, should be the same as the child below
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["col_offset"], 7)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["col_offset"], 6)
         self.assertEqual(ast["body"][1]["value"]["values"][1]["lineno"], 2)
 
         # func() insde the braces
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 2)
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["lineno"], 2)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 1)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["lineno"], 1)
 
         # " string end"
-        self.assertEqual(ast["body"][1]["value"]["values"][2]["col_offset"], 30)
+        self.assertEqual(ast["body"][1]["value"]["values"][2]["col_offset"], 6)
         self.assertEqual(ast["body"][1]["value"]["values"][2]["lineno"], 2)
 
 

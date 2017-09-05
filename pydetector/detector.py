@@ -124,8 +124,6 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
                         verbosity=verbosity
             )
             retdict.update({
-                # 'py2ast': {'PY2AST': py2astroot if py2astroot is not None else None},
-                # 'py3ast': {'PY3AST': py3astroot if py2astroot is not None else None},
                 'py2ast': {'PY2AST': py2astroot} if py2astroot else None,
                 'py3ast': {'PY3AST': py3astroot} if py3astroot else None,
                 'matches': [('PY%dASTOK' % astversion, ())]
@@ -172,7 +170,6 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
 
 if __name__ == '__main__':
     from pprint import pprint
-    import sys
-    with open('astexport.py') as f:
+    with open('detector.py') as f:
         code = f.read()
     pprint(detect(codestr=code, stop_on_ok_ast=False))
