@@ -22,13 +22,11 @@ def ast2dict(codestr):
 class DictExportVisitor(object):
 
     def __init__(self, codestr, ast_parser=ast.parse):
-        self.codestr    = codestr
+        self.codestr = codestr
 
     def _nodedict(self, node, newdict, ast_type=None):
-        """
-        Shortcut that adds ast_type (if not specified),
-        lineno and col_offset to the node-derived dictionary
-        """
+        # Adds ast_type (if not specified), lineno and col_offset to the
+        # node-derived dictionary
         if ast_type is None:
             ast_type = node.__class__.__name__
 
@@ -49,12 +47,12 @@ class DictExportVisitor(object):
         return res
 
     def visit(self, node, root=False):
-        if isinstance(node, string_types) or\
+        if isinstance(node, string_types) or \
                 (not isinstance(node, Sequence) and
                  not isinstance(node, ast.AST)):
             return node
 
-        nodedict = self._nodedict(node, {}, ast_type = node.__class__.__name__)
+        nodedict = self._nodedict(node, {}, ast_type=node.__class__.__name__)
 
         for field in nodedict["_fields"]:
             nodedict[field] = self.visit_field(getattr(node, field))
@@ -68,13 +66,6 @@ class DictExportVisitor(object):
             return [self.visit(x) for x in node]
         else:
             return node
-
-    def visit_str(self, node):
-        """
-        This visits str fields inside nodes (which are represented as keys
-        in the node dictionary), not Str AST nodes
-        """
-        return str(node)
 
 
 if __name__ == '__main__':
@@ -93,4 +84,4 @@ if __name__ == '__main__':
 
 '''
 
-    print(export_dict(content))
+    print(ast2dict(content))

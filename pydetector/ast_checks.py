@@ -85,7 +85,6 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
                     print('>>>> ASTCHECK: error while parsing AST with Python%d:\n%s\n<<<< error output end'
                           % (PYMAJOR_OTHER, err))
         except:
-            print(format_exc())  # XXX
             other_ok = False
             other_error = format_exc()
             if verbosity > 1:
