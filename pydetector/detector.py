@@ -170,6 +170,8 @@ def detect(files=None, codestr=None, ast_checks=True, modules_checks=True,
 
 if __name__ == '__main__':
     from pprint import pprint
-    with open('detector.py') as f:
+    import sys
+
+    with open(sys.argv[1]) as f:
         code = f.read()
     pprint(detect(codestr=code, stop_on_ok_ast=False))
