@@ -78,7 +78,7 @@ def check_ast(code, try_other_on_sucess=False, verbosity=0,
             if p.returncode == 0:
                 if PYMAJOR_CURRENT == 3:
                     # decode to (unicode) str and remove the "l or L" from long literals
-                    out = re.sub(r"([0-9]+)[lL]", "\\1", out.decode('utf-8'))
+                    out = re.sub(r"('n': [0-9]+)[lL],", "\\1,", out.decode('utf-8'))
 
                 other_ast = ast.literal_eval(out)
                 other_ok = True
