@@ -20,7 +20,7 @@ PYMAJOR_OTHER = 2 if PYMAJOR_CURRENT == 3 else 3
 
 
 def check_ast(code, try_other_on_sucess=False, verbosity=0,
-              py2_exec='python2', py3_exec='python3'):
+              py2_exec='/usr/bin/python2', py3_exec='/usr/bin/python3'):
     """
     Try with the ast.parse of both Python 2 and 3 and then
     iterate over the retrieved AST to find specific syntax elements.
