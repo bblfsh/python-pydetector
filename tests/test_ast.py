@@ -104,8 +104,8 @@ class Test20Positions(unittest.TestCase):
         self.assertEqual(ast["body"][1]["value"]["values"][1]["lineno"], 2)
 
         # func() insde the braces
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 1)
-        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["lineno"], 1)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["col_offset"], 22)
+        self.assertEqual(ast["body"][1]["value"]["values"][1]["value"]["lineno"], 2)
 
         # " string end"
         self.assertEqual(ast["body"][1]["value"]["values"][2]["col_offset"], 6)
